@@ -2,15 +2,16 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     fmt::Display,
-    ops::{Add, Deref, DerefMut, Sub, Neg, Mul, AddAssign, SubAssign},
+    ops::{Add, AddAssign, Deref, Mul, Neg, Sub, SubAssign},
+    str::{Chars, FromStr},
 };
 use thiserror::Error;
 
 #[derive(Clone, Copy)]
-pub struct Alphabet<'a>(&'a [u8]);
+pub struct Alphabet<'a>(&'a str);
 
 impl<'a> Deref for Alphabet<'a> {
-    type Target = [u8];
+    type Target = str;
 
     fn deref(&self) -> &'a Self::Target {
         self.0
@@ -18,14 +19,26 @@ impl<'a> Deref for Alphabet<'a> {
 }
 
 pub const STANDARD_ALPHABET: Alphabet =
-    Alphabet(b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/");
+    Alphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/");
 pub const BASE64_ALPHABET: Alphabet =
-    Alphabet(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
+    Alphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum BigIntError {
-    #[error("Base too large: number has {0} digits, alphabet can only represent {1} digits")]
+    #[error("base too large: number has {0} digits, alphabet can only represent {1} digits")]
     BaseTooHigh(usize, usize),
+    #[error("parsing failed: {0}")]
+    ParseFailed(ParseError),
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
+pub enum ParseError {
+    #[error("unrecognized character: {0:?}")]
+    UnrecognizedCharacter(char),
+    #[error("not enough characters")]
+    NotEnoughCharacters,
+    #[error("char {0:?} is {1}; too large to be represented in base {2}")]
+    DigitTooLarge(char, usize, usize),
 }
 
 pub trait GetBack {
@@ -63,12 +76,13 @@ pub struct BigInt<const BASE: usize>(pub bool, pub Vec<u8>);
 
 impl<const BASE: usize> BigInt<BASE> {
     pub fn display(&self, alphabet: Alphabet) -> Result<String, BigIntError> {
-        let digits = self.1
+        let digits = self
+            .1
             .iter()
             .map(|digit| {
                 alphabet
-                    .get(*digit as usize)
-                    .and_then(|c| char::from_u32(*c as u32))
+                    .chars()
+                    .nth(*digit as usize)
                     .ok_or(BigIntError::BaseTooHigh(BASE, alphabet.len()))
             })
             .collect::<Result<String, _>>()?;
@@ -90,21 +104,41 @@ impl<const BASE: usize> BigInt<BASE> {
         }
         self
     }
+
+    pub fn parse(value: &str, alphabet: Alphabet) -> Result<Self, ParseError> {
+        let mut digits = VecDeque::new();
+        let (sign, chars) = match value.chars().next() {
+            Some('-') => (true, value.chars().skip(1)),
+            Some(_) => (false, value.chars().skip(0)),
+            None => return Err(ParseError::NotEnoughCharacters),
+        };
+        for char in chars {
+            match alphabet.chars().position(|c| c == char) {
+                Some(pos) => {
+                    if pos >= BASE {
+                        return Err(ParseError::DigitTooLarge(char, pos, BASE));
+                    } else {
+                        digits.push_back(pos as u8);
+                    }
+                }
+                None => return Err(ParseError::UnrecognizedCharacter(char)),
+            }
+        }
+        if digits.is_empty() {
+            Err(ParseError::NotEnoughCharacters)
+        } else {
+            Ok(BigInt(sign, digits.into()).normalized())
+        }
+    }
 }
 
-// impl<const BASE: usize> Deref for BigInt<BASE> {
-//     type Target = Vec<u8>;
+impl<const BASE: usize> FromStr for BigInt<BASE> {
+    type Err = BigIntError;
 
-//     fn deref(&self) -> &Self::Target {
-//         &self.1
-//     }
-// }
-
-// impl<const BASE: usize> DerefMut for BigInt<BASE> {
-//     fn deref_mut(&mut self) -> &mut Self::Target {
-//         &mut self.1
-//     }
-// }
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s, STANDARD_ALPHABET).map_err(BigIntError::ParseFailed)
+    }
+}
 
 impl<const BASE: usize> From<VecDeque<u8>> for BigInt<BASE> {
     fn from(value: VecDeque<u8>) -> Self {
@@ -198,7 +232,9 @@ impl<const BASE: usize> Add for BigInt<BASE> {
                     }
                 }
             }
-            result.into()
+            let mut result: BigInt<BASE> = result.into();
+            result.0 = self.0;
+            result
         }
     }
 }
@@ -245,7 +281,9 @@ impl<const BASE: usize> Sub for BigInt<BASE> {
                     }
                 }
             }
-            result.into()
+            let mut result: BigInt<BASE> = result.into();
+            result.0 = self.0;
+            result
         }
     }
 }
@@ -316,7 +354,44 @@ fn cmp(a: &[u8], b: &[u8]) -> Ordering {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+
+    use rand::prelude::*;
+
+    #[test]
+    fn parse() {
+        assert_eq!("125".parse(), Ok(BigInt::<10>::from(125)));
+        assert_eq!("-500".parse(), Ok(BigInt::<10>::from(-500)));
+        assert_eq!("0".parse(), Ok(BigInt::<10>::from(0)));
+        assert_eq!(
+            "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".parse(),
+        Ok(BigInt::<10>(false, vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])))
+    }
+
+    #[test]
+    fn parse_error() {
+        assert_eq!(
+            BigInt::<10>::from_str(""),
+            Err(BigIntError::ParseFailed(ParseError::NotEnoughCharacters))
+        );
+        assert_eq!(
+            BigInt::<10>::from_str("-"),
+            Err(BigIntError::ParseFailed(ParseError::NotEnoughCharacters))
+        );
+        assert_eq!(
+            BigInt::<10>::from_str("5B"),
+            Err(BigIntError::ParseFailed(ParseError::DigitTooLarge(
+                'B', 11, 10
+            )))
+        );
+        assert_eq!(
+            BigInt::<10>::from_str("13_4"),
+            Err(BigIntError::ParseFailed(ParseError::UnrecognizedCharacter(
+                '_'
+            )))
+        );
+    }
 
     #[test]
     fn from_primitive() {
@@ -354,6 +429,15 @@ mod tests {
     }
 
     #[test]
+    fn fuzzy_addition_test() {
+        for _ in 0..100_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            assert_eq!(BigInt::<10>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} + {b}");
+        }
+    }
+
+    #[test]
     fn subtraction() {
         let a = BigInt::<10>::from(55);
         let b = BigInt::from(14);
@@ -382,9 +466,34 @@ mod tests {
     }
 
     #[test]
+    fn fuzzy_subtraction_test() {
+        for _ in 0..100_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            assert_eq!(BigInt::<10>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
+        }
+    }
+
+    #[test]
     fn multiplication() {
         let a = BigInt::<10>::from(13);
         let b = BigInt::from(5);
         assert_eq!(a * b, BigInt::from(65));
+    }
+
+    #[test]
+    fn big_multiplication() {
+        let a = BigInt::<10>::from(356432214);
+        let b = BigInt::from(499634);
+        assert_eq!(a * b, BigInt::from(178085652809676_i128));
+    }
+
+    #[test]
+    fn fuzzy_multiplication_test() {
+        for _ in 0..5_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            assert_eq!(BigInt::<10>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
+        }
     }
 }
