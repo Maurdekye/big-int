@@ -267,7 +267,7 @@ impl<const BASE: usize> Sub for BigInt<BASE> {
                             for j in i + 1.. {
                                 match self.1.get_back_mut(j) {
                                     None => unreachable!("subtraction with overflow"),
-                                    Some(digit @ 0) => *digit = BASE as u8 - 1,
+                                    Some(digit @ 0) => *digit = (BASE - 1) as u8,
                                     Some(digit) => {
                                         *digit -= 1;
                                         break;
@@ -494,6 +494,54 @@ mod tests {
             let a = random::<i64>() as i128;
             let b = random::<i64>() as i128;
             assert_eq!(BigInt::<10>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
+        }
+    }
+
+    #[test]
+    fn fuzzy_base_2_tests() {
+        for _ in 0..10_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            assert_eq!(BigInt::<2>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} * {b}");
+            assert_eq!(BigInt::<2>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
+            assert_eq!(BigInt::<2>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
+            // assert_eq!(BigInt::<2>::from(a / b), BigInt::from(a) / BigInt::from(b), "{a} / {b}");
+        }
+    }
+
+    #[test]
+    fn fuzzy_base_16_tests() {
+        for _ in 0..10_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            assert_eq!(BigInt::<16>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} * {b}");
+            assert_eq!(BigInt::<16>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
+            assert_eq!(BigInt::<16>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
+            // assert_eq!(BigInt::<16>::from(a / b), BigInt::from(a) / BigInt::from(b), "{a} / {b}");
+        }
+    }
+
+    #[test]
+    fn fuzzy_base_64_tests() {
+        for _ in 0..10_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            assert_eq!(BigInt::<64>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} * {b}");
+            assert_eq!(BigInt::<64>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
+            assert_eq!(BigInt::<64>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
+            // assert_eq!(BigInt::<64>::from(a / b), BigInt::from(a) / BigInt::from(b), "{a} / {b}");
+        }
+    }
+
+    #[test]
+    fn fuzzy_base_256_tests() {
+        for _ in 0..10_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            assert_eq!(BigInt::<256>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} * {b}");
+            assert_eq!(BigInt::<256>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
+            assert_eq!(BigInt::<256>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
+            // assert_eq!(BigInt::<256>::from(a / b), BigInt::from(a) / BigInt::from(b), "{a} / {b}");
         }
     }
 }
