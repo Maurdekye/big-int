@@ -372,7 +372,7 @@ macro_rules! int_from_bigint {
     };
 }
 
-int_from_bigint!((i128, u128), (i64, u64), (i32, u32), (i16, u16), (i8, u8));
+int_from_bigint!((i128, u128), (i64, u64), (i32, u32), (i16, u16), (i8, u8), (isize, usize));
 
 impl<const BASE: usize> Display for BigInt<BASE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
