@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     fmt::Display,
-    ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub, SubAssign, MulAssign, DivAssign},
+    ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub, SubAssign, MulAssign, DivAssign, Shl, Shr, ShlAssign, ShrAssign},
     str::FromStr,
 };
 use thiserror::Error;
@@ -587,6 +587,36 @@ impl<const BASE: usize> Div for BigInt<BASE> {
 impl<const BASE: usize> DivAssign for BigInt<BASE> {
     fn div_assign(&mut self, rhs: Self) {
         *self = self.clone() / rhs;
+    }
+}
+
+impl<const BASE: usize> Shl for BigInt<BASE> {
+    type Output = Self;
+
+    /// Shifts a `BigInt` right by it's `BASE` (not by 2).
+    fn shl(self, rhs: Self) -> Self::Output {
+        BigInt(self.0, [self.1, vec![0; rhs.into()]].concat())
+    }
+}
+
+impl<const BASE: usize> ShlAssign for BigInt<BASE> {
+    fn shl_assign(&mut self, rhs: Self) {
+        *self = self.clone() << rhs;
+    }
+}
+
+impl<const BASE: usize> Shr for BigInt<BASE> {
+    type Output = Self;
+
+    /// Shifts a `BigInt` left by it's `BASE` (not by 2).
+    fn shr(self, rhs: Self) -> Self::Output {
+        BigInt(self.0, self.1[..self.1.len() - usize::from(rhs)].to_vec())
+    }
+}
+
+impl<const BASE: usize> ShrAssign for BigInt<BASE> {
+    fn shr_assign(&mut self, rhs: Self) {
+        *self = self.clone() >> rhs;
     }
 }
 

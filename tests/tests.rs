@@ -485,6 +485,20 @@ mod tests {
         }
     }
 
+    #[test]
+    fn shl() {
+        assert_eq!(BigInt::<10>::from(15) << BigInt::from(1), BigInt::from(150));
+        assert_eq!(BigInt::<2>::from(41) << BigInt::from(1), BigInt::from(82));
+        assert_eq!(BigInt::<32>::from(7) << BigInt::from(3), BigInt::from(229376));
+    }
+
+    #[test]
+    fn shr() {
+        assert_eq!(BigInt::<10>::from(9100) >> BigInt::from(2), BigInt::from(91));
+        assert_eq!(BigInt::<2>::from(256) >> BigInt::from(4), BigInt::from(16));
+        assert_eq!(BigInt::<16>::from(28672) >> BigInt::from(3), BigInt::from(7));
+    }
+
     const STRESS_TEST_BASE: usize = 1 << 13;
     const STRESS_TEST_DIGITS: usize = 1 << 13;
 
