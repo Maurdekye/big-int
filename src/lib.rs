@@ -2,7 +2,10 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     fmt::Display,
-    ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub, SubAssign, MulAssign, DivAssign, Shl, Shr, ShlAssign, ShrAssign},
+    ops::{
+        Add, AddAssign, Deref, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, ShrAssign,
+        Sub, SubAssign,
+    },
     str::FromStr,
 };
 use thiserror::Error;
@@ -47,7 +50,7 @@ pub enum ParseError {
 pub trait GetBack {
     type Item;
 
-    /// Safely retrieve items from a collection with negative indexing. 
+    /// Safely retrieve items from a collection with negative indexing.
     /// Returns `None` if the index is larger than the length of the collection.
     fn get_back(&self, index: usize) -> Option<&Self::Item>;
 }
@@ -65,7 +68,7 @@ impl<T> GetBack for Vec<T> {
 pub trait GetBackMut {
     type Item;
 
-    /// Safely retrieve a mutable reference from a collection with negative indexing. 
+    /// Safely retrieve a mutable reference from a collection with negative indexing.
     /// Returns `None` if the index is larger than the length of the collection.
     fn get_back_mut(&mut self, index: usize) -> Option<&mut Self::Item>;
 }
@@ -85,7 +88,7 @@ pub type Digit = u16;
 pub type DoubleDigit = u32;
 
 /// `BigInt`: represents an arbitrary-size integer in base `BASE`.
-/// 
+///
 /// `BASE` may be anywhere from 2-65536. If you want to reduce the memory
 /// footprint of `BigInt`, and you don't need to represent a larger
 /// base than 256, then change `Digit` and `DoubleDigit` to `u8` and `u16`, respectively.
@@ -141,12 +144,12 @@ impl<const BASE: usize> BigInt<BASE> {
         match self.1.iter().position(|digit| *digit != 0) {
             None => *self = BigInt(false, vec![0]),
             Some(pos @ 1..) => self.1 = self.1[pos..].to_vec(),
-            _ => {},
+            _ => {}
         }
     }
 
     /// Parse a `BigInt` from a `value: &str`, referencing the provided `alphabet`
-    /// to determine what characters represent which digits. `FromStr` uses this method 
+    /// to determine what characters represent which digits. `FromStr` uses this method
     /// with the default alphabet `STANDARD_ALPHABET`.
     pub fn parse(value: &str, alphabet: Alphabet) -> Result<Self, ParseError> {
         let mut digits = VecDeque::new();
@@ -175,7 +178,7 @@ impl<const BASE: usize> BigInt<BASE> {
     }
 
     /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero. 
+    /// or an error if dividing by zero.
     pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
@@ -214,8 +217,8 @@ impl<const BASE: usize> BigInt<BASE> {
     }
 
     /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero. This algorithm has a different time complexity 
-    /// than `BigInt::div_rem` which makes it more efficient for significantly larger bases, 
+    /// or an error if dividing by zero. This algorithm has a different time complexity
+    /// than `BigInt::div_rem` which makes it more efficient for significantly larger bases,
     /// such as 2^14 or greater.
     pub fn div_rem_2(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
@@ -382,7 +385,14 @@ macro_rules! int_from_bigint {
     };
 }
 
-int_from_bigint!((i128, u128), (i64, u64), (i32, u32), (i16, u16), (i8, u8), (isize, usize));
+int_from_bigint!(
+    (i128, u128),
+    (i64, u64),
+    (i32, u32),
+    (i16, u16),
+    (i8, u8),
+    (isize, usize)
+);
 
 impl<const BASE: usize> Display for BigInt<BASE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -653,4 +663,43 @@ fn cmp(a: &[Digit], b: &[Digit]) -> Ordering {
             },
         }
     }
+}
+
+/// Encode an array of bytes into base64 data.
+///
+/// Note: probably slower than using a standalone
+/// library to perform this conversion. However, it's very neat :3
+pub fn base64_encode(bytes: &[u8]) -> String {
+    let mut digits = bytes
+        .into_iter()
+        .copied()
+        .map(Digit::from)
+        .collect::<Vec<_>>();
+    let padding = 3 - ((digits.len() - 1) % 3) - 1;
+    digits.extend(vec![0; padding]);
+    let data_as_int: BigInt<256> = BigInt::new(digits);
+    let base64_data: BigInt<64> = data_as_int.convert();
+    let base64_string = base64_data.display(BASE64_ALPHABET).unwrap();
+    base64_string[..base64_string.len() - padding].to_string()
+}
+
+/// Decode a base64 string into an array of bytes.
+/// 
+/// Note: probably slower than using a standalone
+/// library to perform this conversion. However, again, it's very neat c:
+pub fn base64_decode(b64_string: impl Into<String>) -> Result<Vec<u8>, BigIntError> {
+    let mut b64_string = b64_string.into();
+    let padding = 4 - ((b64_string.len() - 1) % 4) - 1;
+    b64_string.extend(vec!['A'; padding]);
+    let string_as_int: BigInt<64> =
+        BigInt::parse(&b64_string, BASE64_ALPHABET).map_err(BigIntError::ParseFailed)?;
+    let bytes_int: BigInt<256> = string_as_int.convert();
+    let bytes = bytes_int
+        .1
+        .into_iter()
+        .map(u8::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    let bytes = bytes[..bytes.len() - padding].to_vec();
+    Ok(bytes)
 }

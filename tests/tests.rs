@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
 
+    use base64::{engine::general_purpose::STANDARD_NO_PAD as base64, Engine};
     use big_int::*;
-    use std::str::FromStr;
     use rand::prelude::*;
+    use std::str::FromStr;
 
     #[test]
     fn parse() {
@@ -110,11 +111,7 @@ mod tests {
             let b = BigInt::from(b_);
             let mut c = a.clone();
             c += b.clone();
-            assert_eq!(
-                a + b,
-                c,
-                "{a_} += {b_}"
-            );
+            assert_eq!(a + b, c, "{a_} += {b_}");
         }
     }
 
@@ -177,11 +174,7 @@ mod tests {
             let b = BigInt::from(b_);
             let mut c = a.clone();
             c -= b.clone();
-            assert_eq!(
-                a - b,
-                c,
-                "{a_} -= {b_}"
-            );
+            assert_eq!(a - b, c, "{a_} -= {b_}");
         }
     }
 
@@ -241,7 +234,13 @@ mod tests {
     fn division_4() {
         let a = BigInt::<256>::from(6689728775289925438_u128);
         let b = BigInt::from(3680976435299388678_u128);
-        assert_eq!(a.div_rem(b), Ok((BigInt(false, vec![1]), BigInt(false, vec![41, 193, 60, 79, 234, 66, 226, 56]))));
+        assert_eq!(
+            a.div_rem(b),
+            Ok((
+                BigInt(false, vec![1]),
+                BigInt(false, vec![41, 193, 60, 79, 234, 66, 226, 56])
+            ))
+        );
     }
 
     #[test]
@@ -441,12 +440,18 @@ mod tests {
 
     #[test]
     fn conversion_test() {
-        assert_eq!(BigInt::<10>::from(99825).convert(), BigInt::<16>::from(99825));
+        assert_eq!(
+            BigInt::<10>::from(99825).convert(),
+            BigInt::<16>::from(99825)
+        );
     }
 
     #[test]
     fn conversion_test_2() {
-        assert_eq!(BigInt::<10>::from(-7935368386145574994_isize).convert(), BigInt::<16>::from(-7935368386145574994_isize));
+        assert_eq!(
+            BigInt::<10>::from(-7935368386145574994_isize).convert(),
+            BigInt::<16>::from(-7935368386145574994_isize)
+        );
     }
 
     #[test]
@@ -454,7 +459,11 @@ mod tests {
         let mut rng = thread_rng();
         for _ in 0..10_000 {
             let n = rng.gen::<i64>() as i128;
-            assert_eq!(BigInt::<10>::from(n).convert(), BigInt::<16>::from(n), "{n}")
+            assert_eq!(
+                BigInt::<10>::from(n).convert(),
+                BigInt::<16>::from(n),
+                "{n}"
+            )
         }
     }
 
@@ -472,7 +481,11 @@ mod tests {
         let mut rng = thread_rng();
         for _ in 0..10_000 {
             let n = rng.gen::<i64>() as i128;
-            assert_eq!(BigInt::<27>::from(n).convert(), BigInt::<64>::from(n), "{n}")
+            assert_eq!(
+                BigInt::<27>::from(n).convert(),
+                BigInt::<64>::from(n),
+                "{n}"
+            )
         }
     }
 
@@ -481,7 +494,11 @@ mod tests {
         let mut rng = thread_rng();
         for _ in 0..10_000 {
             let n = rng.gen::<i64>() as i128;
-            assert_eq!(BigInt::<10>::from(n).convert(), BigInt::<256>::from(n), "{n}")
+            assert_eq!(
+                BigInt::<10>::from(n).convert(),
+                BigInt::<256>::from(n),
+                "{n}"
+            )
         }
     }
 
@@ -489,14 +506,35 @@ mod tests {
     fn shl() {
         assert_eq!(BigInt::<10>::from(15) << BigInt::from(1), BigInt::from(150));
         assert_eq!(BigInt::<2>::from(41) << BigInt::from(1), BigInt::from(82));
-        assert_eq!(BigInt::<32>::from(7) << BigInt::from(3), BigInt::from(229376));
+        assert_eq!(
+            BigInt::<32>::from(7) << BigInt::from(3),
+            BigInt::from(229376)
+        );
     }
 
     #[test]
     fn shr() {
-        assert_eq!(BigInt::<10>::from(9100) >> BigInt::from(2), BigInt::from(91));
+        assert_eq!(
+            BigInt::<10>::from(9100) >> BigInt::from(2),
+            BigInt::from(91)
+        );
         assert_eq!(BigInt::<2>::from(256) >> BigInt::from(4), BigInt::from(16));
-        assert_eq!(BigInt::<16>::from(28672) >> BigInt::from(3), BigInt::from(7));
+        assert_eq!(
+            BigInt::<16>::from(28672) >> BigInt::from(3),
+            BigInt::from(7)
+        );
+    }
+
+    #[test]
+    fn base64_encode_test() {
+        let data = b"Hello world!";
+        assert_eq!(base64_encode(data), base64.encode(data));
+    }
+
+    #[test]
+    fn base64_decode_test() {
+        let string = "SGVsbG8gd29ybGQh";
+        assert_eq!(base64_decode(string).unwrap(), base64.decode(string).unwrap());
     }
 
     const STRESS_TEST_BASE: usize = 1 << 13;
@@ -505,8 +543,13 @@ mod tests {
     #[test]
     fn fuzzy_base_256_div_rem_2_stress_test() {
         let mut rng = thread_rng();
-        let a: BigInt<STRESS_TEST_BASE> = BigInt::new((0..STRESS_TEST_DIGITS).map(|_| rng.gen::<u16>()).collect());
-        let b: BigInt<STRESS_TEST_BASE> = BigInt::new((0..STRESS_TEST_DIGITS / 2).map(|_| rng.gen::<u16>()).collect());
+        let a: BigInt<STRESS_TEST_BASE> =
+            BigInt::new((0..STRESS_TEST_DIGITS).map(|_| rng.gen::<u16>()).collect());
+        let b: BigInt<STRESS_TEST_BASE> = BigInt::new(
+            (0..STRESS_TEST_DIGITS / 2)
+                .map(|_| rng.gen::<u16>())
+                .collect(),
+        );
         if b > BigInt::zero() {
             assert!(a.div_rem_2(b).is_ok())
         }
@@ -515,8 +558,13 @@ mod tests {
     #[test]
     fn fuzzy_base_256_div_rem_stress_test() {
         let mut rng = thread_rng();
-        let a: BigInt<STRESS_TEST_BASE> = BigInt::new((0..STRESS_TEST_DIGITS).map(|_| rng.gen::<u16>()).collect());
-        let b: BigInt<STRESS_TEST_BASE> = BigInt::new((0..STRESS_TEST_DIGITS / 2).map(|_| rng.gen::<u16>()).collect());
+        let a: BigInt<STRESS_TEST_BASE> =
+            BigInt::new((0..STRESS_TEST_DIGITS).map(|_| rng.gen::<u16>()).collect());
+        let b: BigInt<STRESS_TEST_BASE> = BigInt::new(
+            (0..STRESS_TEST_DIGITS / 2)
+                .map(|_| rng.gen::<u16>())
+                .collect(),
+        );
         if b > BigInt::zero() {
             assert!(a.div_rem(b).is_ok())
         }
