@@ -593,7 +593,7 @@ impl<const BASE: usize> DivAssign for BigInt<BASE> {
 impl<const BASE: usize> Shl for BigInt<BASE> {
     type Output = Self;
 
-    /// Shifts a `BigInt` right by it's `BASE` (not by 2).
+    /// Shifts a `BigInt` left by it's `BASE` (not by 2).
     fn shl(self, rhs: Self) -> Self::Output {
         BigInt(self.0, [self.1, vec![0; rhs.into()]].concat())
     }
@@ -608,7 +608,7 @@ impl<const BASE: usize> ShlAssign for BigInt<BASE> {
 impl<const BASE: usize> Shr for BigInt<BASE> {
     type Output = Self;
 
-    /// Shifts a `BigInt` left by it's `BASE` (not by 2).
+    /// Shifts a `BigInt` right by it's `BASE` (not by 2).
     fn shr(self, rhs: Self) -> Self::Output {
         BigInt(self.0, self.1[..self.1.len() - usize::from(rhs)].to_vec())
     }
