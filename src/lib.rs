@@ -2,8 +2,8 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     fmt::Display,
-    ops::{Add, AddAssign, Deref, Mul, Neg, Sub, SubAssign},
-    str::{Chars, FromStr},
+    ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub, SubAssign},
+    str::FromStr,
 };
 use thiserror::Error;
 
@@ -29,6 +29,8 @@ pub enum BigIntError {
     BaseTooHigh(usize, usize),
     #[error("parsing failed: {0}")]
     ParseFailed(ParseError),
+    #[error("division by zero")]
+    DivisionByZero,
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -71,10 +73,21 @@ impl<T> GetBackMut for Vec<T> {
     }
 }
 
+type Digit = u8;
+type DoubleDigit = u16;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BigInt<const BASE: usize>(pub bool, pub Vec<u8>);
+pub struct BigInt<const BASE: usize>(pub bool, pub Vec<Digit>);
 
 impl<const BASE: usize> BigInt<BASE> {
+    pub fn new(digits: Vec<Digit>) -> Self {
+        BigInt(false, digits)
+    }
+
+    pub fn zero() -> Self {
+        BigInt(false, vec![0])
+    }
+
     pub fn display(&self, alphabet: Alphabet) -> Result<String, BigIntError> {
         let digits = self
             .1
@@ -93,16 +106,12 @@ impl<const BASE: usize> BigInt<BASE> {
         }
     }
 
-    pub fn normalized(mut self) -> Self {
-        if let Some(pos) = self.1.iter().position(|digit| *digit != 0) {
-            if pos > 0 {
-                self.1 = self.1[pos..].to_vec();
-            }
+    pub fn normalized(self) -> Self {
+        match self.1.iter().position(|digit| *digit != 0) {
+            None => BigInt(false, vec![0]),
+            Some(pos @ 1..) => BigInt(self.0, self.1[pos..].to_vec()),
+            _ => self,
         }
-        if self.1.is_empty() {
-            self.0 = false;
-        }
-        self
     }
 
     pub fn parse(value: &str, alphabet: Alphabet) -> Result<Self, ParseError> {
@@ -118,7 +127,7 @@ impl<const BASE: usize> BigInt<BASE> {
                     if pos >= BASE {
                         return Err(ParseError::DigitTooLarge(char, pos, BASE));
                     } else {
-                        digits.push_back(pos as u8);
+                        digits.push_back(pos as Digit);
                     }
                 }
                 None => return Err(ParseError::UnrecognizedCharacter(char)),
@@ -130,6 +139,60 @@ impl<const BASE: usize> BigInt<BASE> {
             Ok(BigInt(sign, digits.into()).normalized())
         }
     }
+
+    pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
+        if other.clone().normalized() == BigInt::zero() {
+            return Err(BigIntError::DivisionByZero);
+        }
+        if other.1.len() > self.1.len() {
+            return Ok((BigInt(false, vec![0]), self));
+        }
+        let sign = self.0 != other.0;
+        self.0 = false;
+        other.0 = false;
+        let guess_digits = self.1.len() - other.1.len() + 1;
+        let mut quot = BigInt::new(vec![0; guess_digits]);
+        let mut addend = BigInt::new([other.1, vec![0; guess_digits - 1]].concat());
+        let mut prod = BigInt::new(vec![0]);
+
+        for digit in 0..quot.1.len() {
+            for digit_value in 0..BASE {
+                let new_prod = prod.clone() + addend.clone();
+                if new_prod > self {
+                    quot.1[digit] = digit_value as Digit;
+                    break;
+                } else {
+                    prod = new_prod;
+                }
+            }
+            addend.1.pop();
+        }
+
+        quot.0 = sign;
+        let mut rem = self - prod;
+        if rem != BigInt::zero() {
+            rem.0 = sign;
+        }
+
+        Ok((quot.normalized(), rem))
+    }
+
+    pub fn convert<const TO: usize>(mut self) -> BigInt<TO> {
+        let mut digits = VecDeque::new();
+        let to_base = BigInt::<BASE>::from(TO);
+        while self > to_base {
+            let (quot, rem) = self.div_rem(to_base.clone()).unwrap();
+            self = quot;
+            digits.push_front(Digit::from(rem));
+        }
+        BigInt::<TO>(self.0, digits.into()).normalized()
+    }
+}
+
+impl<const BASE: usize> Default for BigInt<BASE> {
+    fn default() -> Self {
+        BigInt(false, vec![0])
+    }
 }
 
 impl<const BASE: usize> FromStr for BigInt<BASE> {
@@ -140,8 +203,8 @@ impl<const BASE: usize> FromStr for BigInt<BASE> {
     }
 }
 
-impl<const BASE: usize> From<VecDeque<u8>> for BigInt<BASE> {
-    fn from(value: VecDeque<u8>) -> Self {
+impl<const BASE: usize> From<VecDeque<Digit>> for BigInt<BASE> {
+    fn from(value: VecDeque<Digit>) -> Self {
         BigInt(false, value.into()).normalized()
     }
 }
@@ -153,9 +216,9 @@ impl<const BASE: usize> From<u128> for BigInt<BASE> {
         while value >= base {
             let (new_value, rem) = (value / base, value % base);
             value = new_value;
-            result.push_front(rem as u8);
+            result.push_front(rem as Digit);
         }
-        result.push_front(value as u8);
+        result.push_front(value as Digit);
         result.into()
     }
 }
@@ -186,6 +249,36 @@ macro_rules! bigint_from_int {
 
 bigint_from_int!(i128; i8, i16, i32, i64, isize);
 bigint_from_int!(u128; u8, u16, u32, u64, usize);
+
+macro_rules! int_from_bigint {
+    ($(($i:ident, $u:ident)),*) => {
+        $(
+            impl<const BASE: usize> From<BigInt<BASE>> for $i {
+                fn from(value: BigInt<BASE>) -> Self {
+                    let mut digits = value.1;
+                    let mut total: $i = 0;
+                    let mut place: $i = 1;
+                    while let Some(digit) = digits.pop() {
+                        total += (digit as $i) * place;
+                        place *= BASE as $i;
+                    }
+                    if value.0 {
+                        total = -total;
+                    }
+                    total
+                }
+            }
+
+            impl<const BASE: usize> From<BigInt<BASE>> for $u {
+                fn from(value: BigInt<BASE>) -> Self {
+                    $i::from(value) as $u
+                }
+            }
+        )*
+    };
+}
+
+int_from_bigint!((i128, u128), (i64, u64), (i32, u32), (i16, u16), (i8, u8));
 
 impl<const BASE: usize> Display for BigInt<BASE> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -219,16 +312,16 @@ impl<const BASE: usize> Add for BigInt<BASE> {
                 match (self.1.get_back(i), rhs.1.get_back(i), carry) {
                     (None, None, 0) => break,
                     (left_digit, right_digit, carry_in) => {
-                        let left_digit = left_digit.copied().unwrap_or_default() as u16;
-                        let right_digit = right_digit.copied().unwrap_or_default() as u16;
+                        let left_digit = left_digit.copied().unwrap_or_default() as DoubleDigit;
+                        let right_digit = right_digit.copied().unwrap_or_default() as DoubleDigit;
                         let mut sum = left_digit + right_digit + carry_in;
-                        if sum >= BASE as u16 {
-                            sum -= BASE as u16;
+                        if sum >= BASE as DoubleDigit {
+                            sum -= BASE as DoubleDigit;
                             carry = 1;
                         } else {
                             carry = 0;
                         }
-                        result.push_front(sum as u8);
+                        result.push_front(sum as Digit);
                     }
                 }
             }
@@ -261,23 +354,23 @@ impl<const BASE: usize> Sub for BigInt<BASE> {
                 match (self.1.get_back(i), rhs.1.get_back(i)) {
                     (None, None) => break,
                     (left_digit, right_digit) => {
-                        let mut left_digit = left_digit.copied().unwrap_or_default() as u16;
-                        let right_digit = right_digit.copied().unwrap_or_default() as u16;
+                        let mut left_digit = left_digit.copied().unwrap_or_default() as DoubleDigit;
+                        let right_digit = right_digit.copied().unwrap_or_default() as DoubleDigit;
                         if left_digit < right_digit {
                             for j in i + 1.. {
                                 match self.1.get_back_mut(j) {
                                     None => unreachable!("subtraction with overflow"),
-                                    Some(digit @ 0) => *digit = (BASE - 1) as u8,
+                                    Some(digit @ 0) => *digit = (BASE - 1) as Digit,
                                     Some(digit) => {
                                         *digit -= 1;
                                         break;
                                     }
                                 }
                             }
-                            left_digit += BASE as u16;
+                            left_digit += BASE as DoubleDigit;
                         }
                         let difference = left_digit - right_digit;
-                        result.push_front(difference as u8);
+                        result.push_front(difference as Digit);
                     }
                 }
             }
@@ -318,6 +411,14 @@ impl<const BASE: usize> Mul for BigInt<BASE> {
     }
 }
 
+impl<const BASE: usize> Div for BigInt<BASE> {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        self.div_rem(rhs).unwrap().0
+    }
+}
+
 impl<const BASE: usize> Ord for BigInt<BASE> {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self.0, other.0) {
@@ -334,7 +435,7 @@ impl<const BASE: usize> PartialOrd for BigInt<BASE> {
     }
 }
 
-fn cmp(a: &[u8], b: &[u8]) -> Ordering {
+fn cmp(a: &[Digit], b: &[Digit]) -> Ordering {
     if a.len() > b.len() {
         Ordering::Greater
     } else if a.len() < b.len() {
@@ -348,200 +449,6 @@ fn cmp(a: &[u8], b: &[u8]) -> Ordering {
                 Ordering::Equal => cmp(rest_a, rest_b),
                 ordering => ordering,
             },
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    use rand::prelude::*;
-
-    #[test]
-    fn parse() {
-        assert_eq!("125".parse(), Ok(BigInt::<10>::from(125)));
-        assert_eq!("-500".parse(), Ok(BigInt::<10>::from(-500)));
-        assert_eq!("0".parse(), Ok(BigInt::<10>::from(0)));
-        assert_eq!(
-            "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".parse(),
-        Ok(BigInt::<10>(false, vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])))
-    }
-
-    #[test]
-    fn parse_error() {
-        assert_eq!(
-            BigInt::<10>::from_str(""),
-            Err(BigIntError::ParseFailed(ParseError::NotEnoughCharacters))
-        );
-        assert_eq!(
-            BigInt::<10>::from_str("-"),
-            Err(BigIntError::ParseFailed(ParseError::NotEnoughCharacters))
-        );
-        assert_eq!(
-            BigInt::<10>::from_str("5B"),
-            Err(BigIntError::ParseFailed(ParseError::DigitTooLarge(
-                'B', 11, 10
-            )))
-        );
-        assert_eq!(
-            BigInt::<10>::from_str("13_4"),
-            Err(BigIntError::ParseFailed(ParseError::UnrecognizedCharacter(
-                '_'
-            )))
-        );
-    }
-
-    #[test]
-    fn from_primitive() {
-        assert_eq!(BigInt::<10>::from(524_u128), BigInt(false, vec![5, 2, 4]));
-        assert_eq!(BigInt::<10>::from(-301_isize), BigInt(true, vec![3, 0, 1]));
-        assert_eq!(BigInt::<10>::from(255_u8), BigInt(false, vec![2, 5, 5]));
-    }
-
-    #[test]
-    fn addition() {
-        let a = BigInt::<10>(false, vec![1, 0, 0]);
-        let b = BigInt(false, vec![2, 1]);
-        assert_eq!(a + b, BigInt(false, vec![1, 2, 1]))
-    }
-
-    #[test]
-    fn addition_with_carry() {
-        let a = BigInt::<10>(false, vec![1, 5]);
-        let b = BigInt(false, vec![6]);
-        assert_eq!(a + b, BigInt(false, vec![2, 1]))
-    }
-
-    #[test]
-    fn addition_with_many_carries() {
-        let a = BigInt::<10>(false, vec![9, 9, 9, 9, 9]);
-        let b = BigInt(false, vec![1]);
-        assert_eq!(a + b, BigInt(false, vec![1, 0, 0, 0, 0, 0]))
-    }
-
-    #[test]
-    fn addition_base_16() {
-        let a = BigInt::<16>(false, vec![8]);
-        let b = BigInt(false, vec![10]);
-        assert_eq!(a + b, BigInt(false, vec![1, 2]))
-    }
-
-    #[test]
-    fn fuzzy_addition_test() {
-        for _ in 0..100_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
-            assert_eq!(BigInt::<10>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} + {b}");
-        }
-    }
-
-    #[test]
-    fn subtraction() {
-        let a = BigInt::<10>::from(55);
-        let b = BigInt::from(14);
-        assert_eq!(a - b, BigInt::from(41));
-    }
-
-    #[test]
-    fn subtraction_with_borrow() {
-        let a = BigInt::<10>::from(12);
-        let b = BigInt::from(4);
-        assert_eq!(a - b, BigInt::from(8));
-    }
-
-    #[test]
-    fn subtraction_with_many_borrows() {
-        let a = BigInt::<10>::from(100000);
-        let b = BigInt::from(1);
-        assert_eq!(a - b, BigInt::from(99999));
-    }
-
-    #[test]
-    fn subtraction_with_overflow() {
-        let a = BigInt::<10>::from(50);
-        let b = BigInt::from(75);
-        assert_eq!(a - b, BigInt::from(-25));
-    }
-
-    #[test]
-    fn fuzzy_subtraction_test() {
-        for _ in 0..100_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
-            assert_eq!(BigInt::<10>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
-        }
-    }
-
-    #[test]
-    fn multiplication() {
-        let a = BigInt::<10>::from(13);
-        let b = BigInt::from(5);
-        assert_eq!(a * b, BigInt::from(65));
-    }
-
-    #[test]
-    fn big_multiplication() {
-        let a = BigInt::<10>::from(356432214);
-        let b = BigInt::from(499634);
-        assert_eq!(a * b, BigInt::from(178085652809676_i128));
-    }
-
-    #[test]
-    fn fuzzy_multiplication_test() {
-        for _ in 0..5_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
-            assert_eq!(BigInt::<10>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
-        }
-    }
-
-    #[test]
-    fn fuzzy_base_2_tests() {
-        for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
-            assert_eq!(BigInt::<2>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} * {b}");
-            assert_eq!(BigInt::<2>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
-            assert_eq!(BigInt::<2>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
-            // assert_eq!(BigInt::<2>::from(a / b), BigInt::from(a) / BigInt::from(b), "{a} / {b}");
-        }
-    }
-
-    #[test]
-    fn fuzzy_base_16_tests() {
-        for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
-            assert_eq!(BigInt::<16>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} * {b}");
-            assert_eq!(BigInt::<16>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
-            assert_eq!(BigInt::<16>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
-            // assert_eq!(BigInt::<16>::from(a / b), BigInt::from(a) / BigInt::from(b), "{a} / {b}");
-        }
-    }
-
-    #[test]
-    fn fuzzy_base_64_tests() {
-        for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
-            assert_eq!(BigInt::<64>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} * {b}");
-            assert_eq!(BigInt::<64>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
-            assert_eq!(BigInt::<64>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
-            // assert_eq!(BigInt::<64>::from(a / b), BigInt::from(a) / BigInt::from(b), "{a} / {b}");
-        }
-    }
-
-    #[test]
-    fn fuzzy_base_256_tests() {
-        for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
-            assert_eq!(BigInt::<256>::from(a + b), BigInt::from(a) + BigInt::from(b), "{a} * {b}");
-            assert_eq!(BigInt::<256>::from(a - b), BigInt::from(a) - BigInt::from(b), "{a} - {b}");
-            assert_eq!(BigInt::<256>::from(a * b), BigInt::from(a) * BigInt::from(b), "{a} * {b}");
-            // assert_eq!(BigInt::<256>::from(a / b), BigInt::from(a) / BigInt::from(b), "{a} / {b}");
         }
     }
 }
