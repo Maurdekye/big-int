@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     fmt::Display,
-    ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub, SubAssign},
+    ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub, SubAssign, MulAssign, DivAssign},
     str::FromStr,
 };
 use thiserror::Error;
@@ -84,7 +84,7 @@ pub type Digit = u16;
 /// this must be twice the size of Digit (for overflow prevention)
 pub type DoubleDigit = u32;
 
-/// `BigInt<BASE>`: represents an arbitrary-size integer in base `BASE`.
+/// `BigInt`: represents an arbitrary-size integer in base `BASE`.
 /// 
 /// `BASE` may be anywhere from 2-65536. If you want to reduce the memory
 /// footprint of `BigInt`, and you don't need to represent a larger
@@ -100,12 +100,12 @@ impl<const BASE: usize> BigInt<BASE> {
         BigInt(false, digits)
     }
 
-    /// The constant zero represented as a `BigInt<BASE>`.
+    /// The constant zero represented as a `BigInt`.
     pub fn zero() -> Self {
         BigInt(false, vec![0])
     }
 
-    /// Convert a `BigInt<BASE>` to a printable string using the provided alphabet `alphabet`.
+    /// Convert a `BigInt` to a printable string using the provided alphabet `alphabet`.
     /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
     pub fn display(&self, alphabet: Alphabet) -> Result<String, BigIntError> {
         let digits = self
@@ -125,7 +125,7 @@ impl<const BASE: usize> BigInt<BASE> {
         }
     }
 
-    /// Normalize a `BigInt<BASE>`. Remove trailing zeros, and disable the parity flag
+    /// Return a normalized version of the `BigInt`. Remove trailing zeros, and disable the parity flag
     /// if the resulting number is zero.
     pub fn normalized(self) -> Self {
         match self.1.iter().position(|digit| *digit != 0) {
@@ -135,7 +135,17 @@ impl<const BASE: usize> BigInt<BASE> {
         }
     }
 
-    /// Parse a `BigInt<BASE>` from a `value: &str`, referencing the provided `alphabet`
+    /// Normalize a `BigInt` in place. Remove trailing zeros, and disable the parity flag
+    /// if the resulting number is zero.
+    pub fn normalize(&mut self) {
+        match self.1.iter().position(|digit| *digit != 0) {
+            None => *self = BigInt(false, vec![0]),
+            Some(pos @ 1..) => self.1 = self.1[pos..].to_vec(),
+            _ => {},
+        }
+    }
+
+    /// Parse a `BigInt` from a `value: &str`, referencing the provided `alphabet`
     /// to determine what characters represent which digits. `FromStr` uses this method 
     /// with the default alphabet `STANDARD_ALPHABET`.
     pub fn parse(value: &str, alphabet: Alphabet) -> Result<Self, ParseError> {
@@ -164,7 +174,7 @@ impl<const BASE: usize> BigInt<BASE> {
         }
     }
 
-    /// Divide one `BigInt<BASE>` by another, returning the quotient & remainder as a pair,
+    /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
     /// or an error if dividing by zero. 
     pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
@@ -203,7 +213,7 @@ impl<const BASE: usize> BigInt<BASE> {
         Ok((quot.normalized(), rem))
     }
 
-    /// Divide one `BigInt<BASE>` by another, returning the quotient & remainder as a pair,
+    /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
     /// or an error if dividing by zero. This algorithm has a different time complexity 
     /// than `BigInt::div_rem` which makes it more efficient for significantly larger bases, 
     /// such as 2^14 or greater.
@@ -426,10 +436,35 @@ impl<const BASE: usize> Add for BigInt<BASE> {
     }
 }
 
-/// todo: specialized implementation
 impl<const BASE: usize> AddAssign for BigInt<BASE> {
     fn add_assign(&mut self, rhs: Self) {
-        *self = self.clone() + rhs;
+        if self.0 != rhs.0 {
+            *self -= -rhs;
+        } else {
+            let self_len = self.1.len();
+            let mut carry = 0;
+            for i in 1.. {
+                match (self.1.get_back(i), rhs.1.get_back(i), carry) {
+                    (None, None, 0) => break,
+                    (left_digit, right_digit, carry_in) => {
+                        let left_digit = left_digit.copied().unwrap_or_default() as DoubleDigit;
+                        let right_digit = right_digit.copied().unwrap_or_default() as DoubleDigit;
+                        let mut sum = left_digit + right_digit + carry_in;
+                        if sum >= BASE as DoubleDigit {
+                            sum -= BASE as DoubleDigit;
+                            carry = 1;
+                        } else {
+                            carry = 0;
+                        }
+                        if i <= self_len {
+                            self.1[self_len - i] = sum as Digit;
+                        } else {
+                            self.1.insert(0, sum as Digit);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -475,10 +510,40 @@ impl<const BASE: usize> Sub for BigInt<BASE> {
     }
 }
 
-/// todo: specialized implementation
 impl<const BASE: usize> SubAssign for BigInt<BASE> {
-    fn sub_assign(&mut self, rhs: Self) {
-        *self = self.clone() - rhs;
+    fn sub_assign(&mut self, mut rhs: Self) {
+        if self.0 != rhs.0 {
+            *self += -rhs;
+        } else if rhs > *self {
+            rhs -= self.clone();
+            *self = -rhs;
+        } else {
+            let self_len = self.1.len();
+            for i in 1.. {
+                match (self.1.get_back(i), rhs.1.get_back(i)) {
+                    (None, None) => break,
+                    (left_digit, right_digit) => {
+                        let mut left_digit = left_digit.copied().unwrap_or_default() as DoubleDigit;
+                        let right_digit = right_digit.copied().unwrap_or_default() as DoubleDigit;
+                        if left_digit < right_digit {
+                            for j in i + 1.. {
+                                match self.1.get_back_mut(j) {
+                                    None => unreachable!("subtraction with overflow"),
+                                    Some(digit @ 0) => *digit = (BASE - 1) as Digit,
+                                    Some(digit) => {
+                                        *digit -= 1;
+                                        break;
+                                    }
+                                }
+                            }
+                            left_digit += BASE as DoubleDigit;
+                        }
+                        self.1[self_len - i] = (left_digit - right_digit) as Digit;
+                    }
+                }
+            }
+        }
+        self.normalize();
     }
 }
 
@@ -505,11 +570,23 @@ impl<const BASE: usize> Mul for BigInt<BASE> {
     }
 }
 
+impl<const BASE: usize> MulAssign for BigInt<BASE> {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = self.clone() * rhs;
+    }
+}
+
 impl<const BASE: usize> Div for BigInt<BASE> {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
         self.div_rem(rhs).unwrap().0
+    }
+}
+
+impl<const BASE: usize> DivAssign for BigInt<BASE> {
+    fn div_assign(&mut self, rhs: Self) {
+        *self = self.clone() / rhs;
     }
 }
 
@@ -529,6 +606,7 @@ impl<const BASE: usize> PartialOrd for BigInt<BASE> {
     }
 }
 
+/// Helper function called recursively when comparing two `BigInt`s.
 fn cmp(a: &[Digit], b: &[Digit]) -> Ordering {
     if a.len() > b.len() {
         Ordering::Greater

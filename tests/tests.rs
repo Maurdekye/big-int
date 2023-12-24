@@ -101,6 +101,24 @@ mod tests {
     }
 
     #[test]
+    fn fuzzy_addassign_test() {
+        let mut rng = thread_rng();
+        for _ in 0..10_000 {
+            let a_ = rng.gen::<i64>() as i128;
+            let b_ = rng.gen::<i64>() as i128;
+            let a: BigInt<10> = BigInt::from(a_);
+            let b = BigInt::from(b_);
+            let mut c = a.clone();
+            c += b.clone();
+            assert_eq!(
+                a + b,
+                c,
+                "{a_} += {b_}"
+            );
+        }
+    }
+
+    #[test]
     fn subtraction() {
         let a = BigInt::<10>::from(55);
         let b = BigInt::from(14);
@@ -145,6 +163,24 @@ mod tests {
                 BigInt::<10>::from(a - b),
                 BigInt::from(a) - BigInt::from(b),
                 "{a} - {b}"
+            );
+        }
+    }
+
+    #[test]
+    fn fuzzy_subassign_test() {
+        let mut rng = thread_rng();
+        for _ in 0..10_000 {
+            let a_ = rng.gen::<i64>() as i128;
+            let b_ = rng.gen::<i64>() as i128;
+            let a: BigInt<10> = BigInt::from(a_);
+            let b = BigInt::from(b_);
+            let mut c = a.clone();
+            c -= b.clone();
+            assert_eq!(
+                a - b,
+                c,
+                "{a_} -= {b_}"
             );
         }
     }
