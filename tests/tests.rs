@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
 
-    use base64::{engine::general_purpose::STANDARD_NO_PAD as base64, Engine};
     use big_int::*;
     use rand::prelude::*;
     use std::str::FromStr;
@@ -528,13 +527,13 @@ mod tests {
     #[test]
     fn base64_encode_test() {
         let data = b"Hello world!";
-        assert_eq!(base64_encode(data), base64.encode(data));
+        assert_eq!(base64_encode(data), "SGVsbG8gd29ybGQh");
     }
 
     #[test]
     fn base64_decode_test() {
         let string = "SGVsbG8gd29ybGQh";
-        assert_eq!(base64_decode(string).unwrap(), base64.decode(string).unwrap());
+        assert_eq!(base64_decode(string).unwrap(), b"Hello world!");
     }
 
     const STRESS_TEST_BASE: usize = 1 << 13;
