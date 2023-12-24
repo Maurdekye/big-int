@@ -88,9 +88,10 @@ mod tests {
 
     #[test]
     fn fuzzy_addition_test() {
+        let mut rng = thread_rng();
         for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             assert_eq!(
                 BigInt::<10>::from(a + b),
                 BigInt::from(a) + BigInt::from(b),
@@ -136,9 +137,10 @@ mod tests {
 
     #[test]
     fn fuzzy_subtraction_test() {
+        let mut rng = thread_rng();
         for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             assert_eq!(
                 BigInt::<10>::from(a - b),
                 BigInt::from(a) - BigInt::from(b),
@@ -163,9 +165,10 @@ mod tests {
 
     #[test]
     fn fuzzy_multiplication_test() {
+        let mut rng = thread_rng();
         for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             assert_eq!(
                 BigInt::<10>::from(a * b),
                 BigInt::from(a) * BigInt::from(b),
@@ -214,9 +217,10 @@ mod tests {
 
     #[test]
     fn fuzzy_division_test() {
+        let mut rng = thread_rng();
         for _ in 0..100_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             if b > 0 {
                 assert_eq!(
                     BigInt::from(a).div_rem(BigInt::from(b)),
@@ -229,9 +233,10 @@ mod tests {
 
     #[test]
     fn fuzzy_base_256_division_test() {
+        let mut rng = thread_rng();
         for _ in 0..100_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             if b > 0 {
                 assert_eq!(
                     BigInt::from(a).div_rem(BigInt::from(b)),
@@ -244,9 +249,10 @@ mod tests {
 
     #[test]
     fn fuzzy_div_rem_2_test() {
+        let mut rng = thread_rng();
         for _ in 0..100_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             if b > 0 {
                 assert_eq!(
                     BigInt::from(a).div_rem_2(BigInt::from(b)),
@@ -259,9 +265,10 @@ mod tests {
 
     #[test]
     fn fuzzy_base_256_div_rem_2_test() {
+        let mut rng = thread_rng();
         for _ in 0..100_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             if b > 0 {
                 assert_eq!(
                     BigInt::from(a).div_rem_2(BigInt::from(b)),
@@ -274,9 +281,10 @@ mod tests {
 
     #[test]
     fn fuzzy_base_2_tests() {
+        let mut rng = thread_rng();
         for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             assert_eq!(
                 BigInt::from(a) + BigInt::from(b),
                 BigInt::<2>::from(a + b),
@@ -304,9 +312,10 @@ mod tests {
 
     #[test]
     fn fuzzy_base_16_tests() {
+        let mut rng = thread_rng();
         for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             assert_eq!(
                 BigInt::from(a) + BigInt::from(b),
                 BigInt::<16>::from(a + b),
@@ -334,9 +343,10 @@ mod tests {
 
     #[test]
     fn fuzzy_base_64_tests() {
+        let mut rng = thread_rng();
         for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             assert_eq!(
                 BigInt::from(a) + BigInt::from(b),
                 BigInt::<64>::from(a + b),
@@ -364,9 +374,10 @@ mod tests {
 
     #[test]
     fn fuzzy_base_256_tests() {
+        let mut rng = thread_rng();
         for _ in 0..10_000 {
-            let a = random::<i64>() as i128;
-            let b = random::<i64>() as i128;
+            let a = rng.gen::<i64>() as i128;
+            let b = rng.gen::<i64>() as i128;
             assert_eq!(
                 BigInt::from(a) + BigInt::from(b),
                 BigInt::<256>::from(a + b),
@@ -393,10 +404,59 @@ mod tests {
     }
 
     #[test]
+    fn conversion_test() {
+        assert_eq!(BigInt::<10>::from(99825).convert(), BigInt::<16>::from(99825));
+    }
+
+    #[test]
+    fn conversion_test_2() {
+        assert_eq!(BigInt::<10>::from(-7935368386145574994_isize).convert(), BigInt::<16>::from(-7935368386145574994_isize));
+    }
+
+    #[test]
+    fn fuzzy_conversion_test_10_to_16() {
+        let mut rng = thread_rng();
+        for _ in 0..10_000 {
+            let n = rng.gen::<i64>() as i128;
+            assert_eq!(BigInt::<10>::from(n).convert(), BigInt::<16>::from(n), "{n}")
+        }
+    }
+
+    #[test]
+    fn fuzzy_conversion_test_2_to_10() {
+        let mut rng = thread_rng();
+        for _ in 0..10_000 {
+            let n = rng.gen::<i64>() as i128;
+            assert_eq!(BigInt::<2>::from(n).convert(), BigInt::<10>::from(n), "{n}")
+        }
+    }
+
+    #[test]
+    fn fuzzy_conversion_test_27_to_64() {
+        let mut rng = thread_rng();
+        for _ in 0..10_000 {
+            let n = rng.gen::<i64>() as i128;
+            assert_eq!(BigInt::<27>::from(n).convert(), BigInt::<64>::from(n), "{n}")
+        }
+    }
+
+    #[test]
+    fn fuzzy_conversion_test_10_to_256() {
+        let mut rng = thread_rng();
+        for _ in 0..10_000 {
+            let n = rng.gen::<i64>() as i128;
+            assert_eq!(BigInt::<10>::from(n).convert(), BigInt::<256>::from(n), "{n}")
+        }
+    }
+
+    const STRESS_TEST_BASE: usize = 1 << 13;
+    const STRESS_TEST_DIGITS: usize = 1 << 13;
+
+    #[test]
     fn fuzzy_base_256_div_rem_2_stress_test() {
         let mut rng = thread_rng();
-        let a: BigInt<655536> = BigInt::new((0..(1 << 13)).map(|_| rng.gen::<u16>()).collect());
-        let b: BigInt<655536> = BigInt::new((0..(1 << 12)).map(|_| rng.gen::<u16>()).collect());
+        let a: BigInt<STRESS_TEST_BASE> = BigInt::new((0..STRESS_TEST_DIGITS).map(|_| rng.gen::<u16>()).collect());
+        let b: BigInt<STRESS_TEST_BASE> = BigInt::new((0..STRESS_TEST_DIGITS / 2).map(|_| rng.gen::<u16>()).collect());
         if b > BigInt::zero() {
             assert!(a.div_rem_2(b).is_ok())
         }
@@ -405,8 +465,8 @@ mod tests {
     #[test]
     fn fuzzy_base_256_div_rem_stress_test() {
         let mut rng = thread_rng();
-        let a: BigInt<655536> = BigInt::new((0..(1 << 4)).map(|_| rng.gen::<u16>()).collect());
-        let b: BigInt<655536> = BigInt::new((0..(1 << 3)).map(|_| rng.gen::<u16>()).collect());
+        let a: BigInt<STRESS_TEST_BASE> = BigInt::new((0..STRESS_TEST_DIGITS).map(|_| rng.gen::<u16>()).collect());
+        let b: BigInt<STRESS_TEST_BASE> = BigInt::new((0..STRESS_TEST_DIGITS / 2).map(|_| rng.gen::<u16>()).collect());
         if b > BigInt::zero() {
             assert!(a.div_rem(b).is_ok())
         }

@@ -43,9 +43,12 @@ pub enum ParseError {
     DigitTooLarge(char, usize, usize),
 }
 
+/// Safely retrieve items from a collection with negative indexing.
 pub trait GetBack {
     type Item;
 
+    /// Safely retrieve items from a collection with negative indexing. 
+    /// Returns `None` if the index is larger than the length of the collection.
     fn get_back(&self, index: usize) -> Option<&Self::Item>;
 }
 
@@ -58,9 +61,12 @@ impl<T> GetBack for Vec<T> {
     }
 }
 
+/// Safely retrieve a mutable reference from a collection with negative indexing.
 pub trait GetBackMut {
     type Item;
 
+    /// Safely retrieve a mutable reference from a collection with negative indexing. 
+    /// Returns `None` if the index is larger than the length of the collection.
     fn get_back_mut(&mut self, index: usize) -> Option<&mut Self::Item>;
 }
 
@@ -73,21 +79,34 @@ impl<T> GetBackMut for Vec<T> {
     }
 }
 
-type Digit = u16;
-type DoubleDigit = u32;
+/// change these if you want to represent bases larger than 65536
+pub type Digit = u16;
+/// this must be twice the size of Digit (for overflow prevention)
+pub type DoubleDigit = u32;
 
+/// `BigInt<BASE>`: represents an arbitrary-size integer in base `BASE`.
+/// 
+/// `BASE` may be anywhere from 2-65536. If you want to reduce the memory
+/// footprint of `BigInt`, and you don't need to represent a larger
+/// base than 256, then change `Digit` and `DoubleDigit` to `u8` and `u16`, respectively.
+/// If you would like to be able to represent a larger base than 65536, then increase `Digit`
+/// and `DoubleDigit` as needed, as high as `u64` + `u128`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BigInt<const BASE: usize>(pub bool, pub Vec<Digit>);
 
 impl<const BASE: usize> BigInt<BASE> {
+    /// Create a new `BigInt` directly from a `Vec` of individual digits.
     pub fn new(digits: Vec<Digit>) -> Self {
         BigInt(false, digits)
     }
 
+    /// The constant zero represented as a `BigInt<BASE>`.
     pub fn zero() -> Self {
         BigInt(false, vec![0])
     }
 
+    /// Convert a `BigInt<BASE>` to a printable string using the provided alphabet `alphabet`.
+    /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
     pub fn display(&self, alphabet: Alphabet) -> Result<String, BigIntError> {
         let digits = self
             .1
@@ -106,6 +125,8 @@ impl<const BASE: usize> BigInt<BASE> {
         }
     }
 
+    /// Normalize a `BigInt<BASE>`. Remove trailing zeros, and disable the parity flag
+    /// if the resulting number is zero.
     pub fn normalized(self) -> Self {
         match self.1.iter().position(|digit| *digit != 0) {
             None => BigInt(false, vec![0]),
@@ -114,6 +135,9 @@ impl<const BASE: usize> BigInt<BASE> {
         }
     }
 
+    /// Parse a `BigInt<BASE>` from a `value: &str`, referencing the provided `alphabet`
+    /// to determine what characters represent which digits. `FromStr` uses this method 
+    /// with the default alphabet `STANDARD_ALPHABET`.
     pub fn parse(value: &str, alphabet: Alphabet) -> Result<Self, ParseError> {
         let mut digits = VecDeque::new();
         let (sign, chars) = match value.chars().next() {
@@ -140,6 +164,8 @@ impl<const BASE: usize> BigInt<BASE> {
         }
     }
 
+    /// Divide one `BigInt<BASE>` by another, returning the quotient & remainder as a pair,
+    /// or an error if dividing by zero. 
     pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
@@ -177,6 +203,10 @@ impl<const BASE: usize> BigInt<BASE> {
         Ok((quot.normalized(), rem))
     }
 
+    /// Divide one `BigInt<BASE>` by another, returning the quotient & remainder as a pair,
+    /// or an error if dividing by zero. This algorithm has a different time complexity 
+    /// than `BigInt::div_rem` which makes it more efficient for significantly larger bases, 
+    /// such as 2^14 or greater.
     pub fn div_rem_2(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
@@ -222,15 +252,34 @@ impl<const BASE: usize> BigInt<BASE> {
         Ok((quot.normalized(), rem))
     }
 
+    /// Convert a `BigInt` from its own base to another target base.
     pub fn convert<const TO: usize>(mut self) -> BigInt<TO> {
+        let sign = self.0;
+        self.0 = false;
         let mut digits = VecDeque::new();
         let to_base = BigInt::<BASE>::from(TO);
-        while self > to_base {
+        while self >= to_base {
             let (quot, rem) = self.div_rem(to_base.clone()).unwrap();
             self = quot;
             digits.push_front(Digit::from(rem));
         }
-        BigInt::<TO>(self.0, digits.into()).normalized()
+        digits.push_front(Digit::from(self));
+        BigInt::<TO>(sign, digits.into()).normalized()
+    }
+
+    /// Convert a `BigInt` from its own base to another target base. Uses `BigInt::div_rem_2`, making converting
+    /// from very large bases more efficient.
+    pub fn convert_2<const TO: usize>(mut self) -> BigInt<TO> {
+        let mut digits = VecDeque::new();
+        let to_base = BigInt::<BASE>::from(TO);
+        while self > to_base {
+            let (quot, rem) = self.div_rem_2(to_base.clone()).unwrap();
+            self = quot;
+            digits.push_front(Digit::from(rem));
+        }
+        let sign = self.0;
+        digits.push_front(Digit::from(self));
+        BigInt::<TO>(sign, digits.into()).normalized()
     }
 }
 
