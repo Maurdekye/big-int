@@ -100,7 +100,8 @@ pub struct BigInt<const BASE: usize>(bool, Vec<Digit>);
 impl<const BASE: usize> BigInt<BASE> {
     /// Create a new `BigInt` directly from a `Vec` of individual digits.
     ///
-    /// Ensure the resulting int is properly normalized to preserve soundness.
+    /// Ensure the resulting int is properly normalized, and that no digits are greater than or
+    /// equal to the base, to preserve soundness.
     ///
     /// To construct a negative `BigInt` from raw parts, simply apply the negation
     /// operator (`-`) afterwards. 
@@ -193,8 +194,11 @@ impl<const BASE: usize> BigInt<BASE> {
     }
 
     /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero.
-    pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
+    /// or an error if dividing by zero. 
+    /// 
+    /// Deprecated; use `div_rem` instead, as it's more efficient.
+    #[deprecated]
+    pub fn div_rem_(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
         }
@@ -234,9 +238,8 @@ impl<const BASE: usize> BigInt<BASE> {
 
     /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
     /// or an error if dividing by zero. This algorithm has a different time complexity
-    /// than `BigInt::div_rem` which makes it more efficient for significantly larger bases,
-    /// such as 2^14 or greater.
-    pub fn div_rem_2(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
+    /// than `BigInt::div_rem` which makes it more efficient for most use cases.
+    pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
         }
@@ -290,22 +293,6 @@ impl<const BASE: usize> BigInt<BASE> {
         let to_base = BigInt::<BASE>::from(TO);
         while self >= to_base {
             let (quot, rem) = self.div_rem(to_base.clone()).unwrap();
-            self = quot;
-            digits.push_front(Digit::from(rem));
-        }
-        digits.push_front(Digit::from(self));
-        BigInt::<TO>(sign, digits.into()).normalized()
-    }
-
-    /// Convert a `BigInt` from its own base to another target base. Uses `BigInt::div_rem_2`, making converting
-    /// from very large bases more efficient.
-    pub fn convert_2<const TO: usize>(mut self) -> BigInt<TO> {
-        let sign = self.0;
-        self.0 = false;
-        let mut digits = VecDeque::new();
-        let to_base = BigInt::<BASE>::from(TO);
-        while self > to_base {
-            let (quot, rem) = self.div_rem_2(to_base.clone()).unwrap();
             self = quot;
             digits.push_front(Digit::from(rem));
         }

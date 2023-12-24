@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 #[cfg(test)]
 mod tests {
 
@@ -239,21 +241,21 @@ mod tests {
     fn division() {
         let a: BigInt<10> = 999_999_999.into();
         let b = 56_789.into();
-        assert_eq!(a.div_rem(b), Ok((17_609.into(), 2_498.into())));
+        assert_eq!(a.div_rem_(b), Ok((17_609.into(), 2_498.into())));
     }
 
     #[test]
     fn division_2() {
         let a: BigInt<10> = (-25106).into();
         let b = 6331.into();
-        assert_eq!(a.div_rem(b), Ok(((-3).into(), (-6113).into())));
+        assert_eq!(a.div_rem_(b), Ok(((-3).into(), (-6113).into())));
     }
 
     #[test]
     fn division_3() {
         let a: BigInt<10> = (-27792).into();
         let b = 6.into();
-        assert_eq!(a.div_rem(b), Ok(((-4632).into(), 0.into())));
+        assert_eq!(a.div_rem_(b), Ok(((-4632).into(), 0.into())));
     }
 
     #[test]
@@ -261,7 +263,7 @@ mod tests {
         let a: BigInt<256> = 6689728775289925438_u128.into();
         let b = 3680976435299388678_u128.into();
         assert_eq!(
-            a.div_rem(b),
+            a.div_rem_(b),
             Ok((unsafe { BigInt::from_raw_parts(vec![1]) }, unsafe {
                 BigInt::from_raw_parts(vec![41, 193, 60, 79, 234, 66, 226, 56])
             },))
@@ -272,7 +274,7 @@ mod tests {
     fn division_by_zero() {
         let a: BigInt<10> = 999_999_999.into();
         let b = 0.into();
-        assert_eq!(a.div_rem(b), Err(BigIntError::DivisionByZero));
+        assert_eq!(a.div_rem_(b), Err(BigIntError::DivisionByZero));
     }
 
     #[test]
@@ -283,7 +285,7 @@ mod tests {
             let b = rng.gen::<i64>() as i128;
             if b > 0 {
                 assert_eq!(
-                    BigInt::from(a).div_rem(BigInt::from(b)),
+                    BigInt::from(a).div_rem_(BigInt::from(b)),
                     Ok((BigInt::<10>::from(a / b), BigInt::<10>::from(a % b))),
                     "{a} / {b}"
                 );
@@ -299,7 +301,7 @@ mod tests {
             let b = rng.gen::<i64>() as i128;
             if b > 0 {
                 assert_eq!(
-                    BigInt::<256>::from(a).div_rem(b.into()),
+                    BigInt::<256>::from(a).div_rem_(b.into()),
                     Ok(((a / b).into(), (a % b).into())),
                     "{a} / {b}"
                 );
@@ -315,7 +317,7 @@ mod tests {
             let b = rng.gen::<i64>() as i128;
             if b > 0 {
                 assert_eq!(
-                    BigInt::<10>::from(a).div_rem_2(b.into()),
+                    BigInt::<10>::from(a).div_rem(b.into()),
                     Ok(((a / b).into(), (a % b).into())),
                     "{a} / {b}"
                 );
@@ -331,7 +333,7 @@ mod tests {
             let b = rng.gen::<i64>() as i128;
             if b > 0 {
                 assert_eq!(
-                    BigInt::<256>::from(a).div_rem_2(b.into()),
+                    BigInt::<256>::from(a).div_rem(b.into()),
                     Ok(((a / b).into(), (a % b).into())),
                     "{a} / {b}"
                 );
