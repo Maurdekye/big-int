@@ -391,4 +391,24 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn fuzzy_base_256_div_rem_2_stress_test() {
+        let mut rng = thread_rng();
+        let a: BigInt<655536> = BigInt::new((0..(1 << 13)).map(|_| rng.gen::<u16>()).collect());
+        let b: BigInt<655536> = BigInt::new((0..(1 << 12)).map(|_| rng.gen::<u16>()).collect());
+        if b > BigInt::zero() {
+            assert!(a.div_rem_2(b).is_ok())
+        }
+    }
+
+    #[test]
+    fn fuzzy_base_256_div_rem_stress_test() {
+        let mut rng = thread_rng();
+        let a: BigInt<655536> = BigInt::new((0..(1 << 4)).map(|_| rng.gen::<u16>()).collect());
+        let b: BigInt<655536> = BigInt::new((0..(1 << 3)).map(|_| rng.gen::<u16>()).collect());
+        if b > BigInt::zero() {
+            assert!(a.div_rem(b).is_ok())
+        }
+    }
 }

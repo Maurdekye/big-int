@@ -73,8 +73,8 @@ impl<T> GetBackMut for Vec<T> {
     }
 }
 
-type Digit = u8;
-type DoubleDigit = u16;
+type Digit = u16;
+type DoubleDigit = u32;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BigInt<const BASE: usize>(pub bool, pub Vec<Digit>);
