@@ -228,6 +228,51 @@ mod tests {
     }
 
     #[test]
+    fn fuzzy_base_256_division_test() {
+        for _ in 0..100_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            if b > 0 {
+                assert_eq!(
+                    BigInt::from(a).div_rem(BigInt::from(b)),
+                    Ok((BigInt::<256>::from(a / b), BigInt::<256>::from(a % b))),
+                    "{a} / {b}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fuzzy_div_rem_2_test() {
+        for _ in 0..100_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            if b > 0 {
+                assert_eq!(
+                    BigInt::from(a).div_rem_2(BigInt::from(b)),
+                    Ok((BigInt::<10>::from(a / b), BigInt::<10>::from(a % b))),
+                    "{a} / {b}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn fuzzy_base_256_div_rem_2_test() {
+        for _ in 0..100_000 {
+            let a = random::<i64>() as i128;
+            let b = random::<i64>() as i128;
+            if b > 0 {
+                assert_eq!(
+                    BigInt::from(a).div_rem_2(BigInt::from(b)),
+                    Ok((BigInt::<256>::from(a / b), BigInt::<256>::from(a % b))),
+                    "{a} / {b}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn fuzzy_base_2_tests() {
         for _ in 0..10_000 {
             let a = random::<i64>() as i128;

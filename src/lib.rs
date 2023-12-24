@@ -150,9 +150,9 @@ impl<const BASE: usize> BigInt<BASE> {
         let sign = self.0 != other.0;
         self.0 = false;
         other.0 = false;
-        let guess_digits = self.1.len() - other.1.len() + 1;
-        let mut quot = BigInt::new(vec![0; guess_digits]);
-        let mut addend = BigInt::new([other.1, vec![0; guess_digits - 1]].concat());
+        let quot_digits = self.1.len() - other.1.len() + 1;
+        let mut quot = BigInt::new(vec![0; quot_digits]);
+        let mut addend = BigInt::new([other.1, vec![0; quot_digits - 1]].concat());
         let mut prod = BigInt::new(vec![0]);
 
         for digit in 0..quot.1.len() {
@@ -166,6 +166,51 @@ impl<const BASE: usize> BigInt<BASE> {
                 }
             }
             addend.1.pop();
+        }
+
+        quot.0 = sign;
+        let mut rem = self - prod;
+        if rem != BigInt::zero() {
+            rem.0 = sign;
+        }
+
+        Ok((quot.normalized(), rem))
+    }
+
+    pub fn div_rem_2(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
+        if other.clone().normalized() == BigInt::zero() {
+            return Err(BigIntError::DivisionByZero);
+        }
+        if other.1.len() > self.1.len() {
+            return Ok((BigInt(false, vec![0]), self));
+        }
+        let sign = self.0 != other.0;
+        self.0 = false;
+        other.0 = false;
+        let quot_digits = self.1.len() - other.1.len() + 1;
+        let mut quot = BigInt::new(vec![0; quot_digits]);
+        let mut prod = BigInt::new(vec![0]);
+        let mut addend: BigInt<BASE> = BigInt::new([other.1, vec![0; quot_digits - 1]].concat());
+        let mut addends = Vec::new();
+        let mut power = 1;
+        while power < BASE {
+            addends.push(addend.clone());
+            addend += addend.clone();
+            power <<= 1;
+        }
+
+        for digit in 0..quot.1.len() {
+            let mut digit_value = 0;
+            for power in (0..addends.len()).rev() {
+                let new_digit_value = digit_value + (1 << power);
+                let new_prod = prod.clone() + addends[power].clone();
+                if new_prod < self {
+                    digit_value = new_digit_value;
+                    prod = new_prod;
+                }
+                addends[power].1.pop();
+            }
+            quot.1[digit] = digit_value;
         }
 
         quot.0 = sign;
