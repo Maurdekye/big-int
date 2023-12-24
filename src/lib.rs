@@ -95,11 +95,26 @@ pub type DoubleDigit = u32;
 /// If you would like to be able to represent a larger base than 65536, then increase `Digit`
 /// and `DoubleDigit` as needed, as high as `u64` + `u128`.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BigInt<const BASE: usize>(pub bool, pub Vec<Digit>);
+pub struct BigInt<const BASE: usize>(bool, Vec<Digit>);
 
 impl<const BASE: usize> BigInt<BASE> {
     /// Create a new `BigInt` directly from a `Vec` of individual digits.
-    pub fn new(digits: Vec<Digit>) -> Self {
+    ///
+    /// Ensure the resulting int is properly normalized to preserve soundness.
+    ///
+    /// To construct a negative `BigInt` from raw parts, simply apply the negation
+    /// operator (`-`) afterwards. 
+    ///
+    /// ex: 
+    /// ```
+    /// use big_int::*;
+    /// 
+    /// assert_eq!(
+    ///     unsafe { -BigInt::<10>::from_raw_parts(vec![1, 5]) }, 
+    ///     (-15).into()
+    /// );
+    /// ```
+    pub unsafe fn from_raw_parts(digits: Vec<Digit>) -> Self {
         BigInt(false, digits)
     }
 
@@ -190,9 +205,10 @@ impl<const BASE: usize> BigInt<BASE> {
         self.0 = false;
         other.0 = false;
         let quot_digits = self.1.len() - other.1.len() + 1;
-        let mut quot = BigInt::new(vec![0; quot_digits]);
-        let mut addend = BigInt::new([other.1, vec![0; quot_digits - 1]].concat());
-        let mut prod = BigInt::new(vec![0]);
+        let mut quot = unsafe { BigInt::from_raw_parts(vec![0; quot_digits]) };
+        let mut addend =
+            unsafe { BigInt::from_raw_parts([other.1, vec![0; quot_digits - 1]].concat()) };
+        let mut prod = unsafe { BigInt::from_raw_parts(vec![0]) };
 
         for digit in 0..quot.1.len() {
             for digit_value in 0..BASE {
@@ -231,9 +247,10 @@ impl<const BASE: usize> BigInt<BASE> {
         self.0 = false;
         other.0 = false;
         let quot_digits = self.1.len() - other.1.len() + 1;
-        let mut quot = BigInt::new(vec![0; quot_digits]);
-        let mut prod = BigInt::new(vec![0]);
-        let mut addend: BigInt<BASE> = BigInt::new([other.1, vec![0; quot_digits - 1]].concat());
+        let mut quot = unsafe { BigInt::from_raw_parts(vec![0; quot_digits]) };
+        let mut prod = unsafe { BigInt::from_raw_parts(vec![0]) };
+        let mut addend: BigInt<BASE> =
+            unsafe { BigInt::from_raw_parts([other.1, vec![0; quot_digits - 1]].concat()) };
         let mut addends = Vec::new();
         let mut power = 1;
         while power < BASE {
@@ -499,7 +516,7 @@ impl<const BASE: usize> Sub for BigInt<BASE> {
                         if left_digit < right_digit {
                             for j in i + 1.. {
                                 match self.1.get_back_mut(j) {
-                                    None => unreachable!("subtraction with overflow"),
+                                    None => unreachable!("`BigInt` subtraction with overflow"),
                                     Some(digit @ 0) => *digit = (BASE - 1) as Digit,
                                     Some(digit) => {
                                         *digit -= 1;
@@ -604,13 +621,14 @@ impl<const BASE: usize> DivAssign for BigInt<BASE> {
 impl<const BASE: usize> Shl for BigInt<BASE> {
     type Output = Self;
 
-    /// Shifts a `BigInt` left by it's `BASE` (not by 2).
+    /// Shifts a `BigInt` left by multiples of its `BASE` (not by 2).
     fn shl(self, rhs: Self) -> Self::Output {
         BigInt(self.0, [self.1, vec![0; rhs.into()]].concat())
     }
 }
 
 impl<const BASE: usize> ShlAssign for BigInt<BASE> {
+    /// Shifts a `BigInt` left by multiples of its `BASE` (not by 2).
     fn shl_assign(&mut self, rhs: Self) {
         *self = self.clone() << rhs;
     }
@@ -619,15 +637,17 @@ impl<const BASE: usize> ShlAssign for BigInt<BASE> {
 impl<const BASE: usize> Shr for BigInt<BASE> {
     type Output = Self;
 
-    /// Shifts a `BigInt` right by it's `BASE` (not by 2).
+    /// Shifts a `BigInt` right by multiples of its `BASE` (not by 2).
     fn shr(self, rhs: Self) -> Self::Output {
-        BigInt(self.0, self.1[..self.1.len() - usize::from(rhs)].to_vec())
+        BigInt(self.0, self.1[..self.1.len() - usize::from(rhs)].to_vec()).normalized()
     }
 }
 
 impl<const BASE: usize> ShrAssign for BigInt<BASE> {
+    /// Shifts a `BigInt` right by multiples of its `BASE` (not by 2).
     fn shr_assign(&mut self, rhs: Self) {
         *self = self.clone() >> rhs;
+        self.normalize()
     }
 }
 
@@ -678,14 +698,14 @@ pub fn base64_encode(bytes: &[u8]) -> String {
         .collect::<Vec<_>>();
     let padding = 3 - ((digits.len() - 1) % 3) - 1;
     digits.extend(vec![0; padding]);
-    let data_as_int: BigInt<256> = BigInt::new(digits);
+    let data_as_int: BigInt<256> = unsafe { BigInt::from_raw_parts(digits) };
     let base64_data: BigInt<64> = data_as_int.convert();
     let base64_string = base64_data.display(BASE64_ALPHABET).unwrap();
     base64_string[..base64_string.len() - padding].to_string()
 }
 
 /// Decode a base64 string into an array of bytes.
-/// 
+///
 /// Note: probably slower than using a standalone
 /// library to perform this conversion. However, again, it's very neat c:
 pub fn base64_decode(b64_string: impl Into<String>) -> Result<Vec<u8>, BigIntError> {
