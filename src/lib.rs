@@ -283,6 +283,8 @@ impl<const BASE: usize> BigInt<BASE> {
     /// Convert a `BigInt` from its own base to another target base. Uses `BigInt::div_rem_2`, making converting
     /// from very large bases more efficient.
     pub fn convert_2<const TO: usize>(mut self) -> BigInt<TO> {
+        let sign = self.0;
+        self.0 = false;
         let mut digits = VecDeque::new();
         let to_base = BigInt::<BASE>::from(TO);
         while self > to_base {
@@ -290,7 +292,6 @@ impl<const BASE: usize> BigInt<BASE> {
             self = quot;
             digits.push_front(Digit::from(rem));
         }
-        let sign = self.0;
         digits.push_front(Digit::from(self));
         BigInt::<TO>(sign, digits.into()).normalized()
     }
