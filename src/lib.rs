@@ -1,17 +1,37 @@
+//! ## `big_int` - Arbitrary precision, arbitrary base integer arithmetic library.
+//! 
+//! ```
+//! use big_int::*;
+//! 
+//! let mut a: BigInt<10> = "9000000000000000000000000000000000000000".parse().unwrap();
+//! 
+//! a /= 13.into();
+//! assert_eq!(a, "692307692307692307692307692307692307692".parse().unwrap());
+//! 
+//! let mut b: BigInt<16> = a.convert();
+//! assert_eq!(b, "208D59C8D8669EDC306F76344EC4EC4EC".parse().unwrap());
+//! 
+//! b >>= 16.into();
+//! let c: BigInt<2> = b.convert();
+//! assert_eq!(c, "100000100011010101100111001000110110000110011010011110110111000011".parse().unwrap());
+//! ```
+
 use std::{
     cmp::Ordering,
     collections::VecDeque,
     fmt::Display,
     ops::{
-        Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, ShrAssign,
-        Sub, SubAssign,
+        Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, ShrAssign, Sub,
+        SubAssign,
     },
     str::FromStr,
 };
 use thiserror::Error;
 
-pub const STANDARD_ALPHABET: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
-pub const BASE64_ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+pub const STANDARD_ALPHABET: &str =
+    "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
+pub const BASE64_ALPHABET: &str =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum BigIntError {
@@ -69,16 +89,14 @@ impl<T> GetBackMut for Vec<T> {
     }
 }
 
-/// change these if you want to represent bases larger than 65536
-pub type Digit = u16;
+/// change these if you want to represent bases larger than 256
+pub type Digit = u8;
 /// this must be twice the size of Digit (for overflow prevention)
-pub type DoubleDigit = u32;
+pub type DoubleDigit = u16;
 
 /// `BigInt`: represents an arbitrary-size integer in base `BASE`.
 ///
-/// `BASE` may be anywhere from 2-65536. If you want to reduce the memory
-/// footprint of `BigInt`, and you don't need to represent a larger
-/// base than 256, then change `Digit` and `DoubleDigit` to `u8` and `u16`, respectively.
+/// `BASE` may be anywhere from 2-256.
 /// If you would like to be able to represent a larger base than 65536, then increase `Digit`
 /// and `DoubleDigit` as needed, as high as `u64` + `u128`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -93,7 +111,6 @@ impl<const BASE: usize> BigInt<BASE> {
     /// To construct a negative `BigInt` from raw parts, simply apply the negation
     /// operator (`-`) afterwards.
     ///
-    /// ex:
     /// ```
     /// use big_int::*;
     ///
@@ -113,6 +130,15 @@ impl<const BASE: usize> BigInt<BASE> {
 
     /// Convert a `BigInt` to a printable string using the provided alphabet `alphabet`.
     /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// assert_eq!(
+    ///     BigInt::<10>::from(6012).display(STANDARD_ALPHABET).unwrap(),
+    ///     "6012".to_string()
+    /// );
+    /// ```
     pub fn display(&self, alphabet: &str) -> Result<String, BigIntError> {
         let digits = self
             .1
@@ -133,9 +159,16 @@ impl<const BASE: usize> BigInt<BASE> {
 
     /// Return a normalized version of the `BigInt`. Remove trailing zeros, and disable the parity flag
     /// if the resulting number is zero.
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// let n = unsafe { BigInt::<10>::from_raw_parts(vec![0, 0, 8, 3]) };
+    /// assert_eq!(n.normalized(), 83.into());
+    /// ```
     pub fn normalized(self) -> Self {
         match self.1.iter().position(|digit| *digit != 0) {
-            None => BigInt(false, vec![0]),
+            None => BigInt::zero(),
             Some(pos @ 1..) => BigInt(self.0, self.1[pos..].to_vec()),
             _ => self,
         }
@@ -143,6 +176,14 @@ impl<const BASE: usize> BigInt<BASE> {
 
     /// Normalize a `BigInt` in place. Remove trailing zeros, and disable the parity flag
     /// if the resulting number is zero.
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// let mut n = unsafe { BigInt::<10>::from_raw_parts(vec![0, 0, 8, 3]) };
+    /// n.normalize();
+    /// assert_eq!(n, 83.into());
+    /// ```
     pub fn normalize(&mut self) {
         match self.1.iter().position(|digit| *digit != 0) {
             None => *self = BigInt(false, vec![0]),
@@ -154,6 +195,12 @@ impl<const BASE: usize> BigInt<BASE> {
     /// Parse a `BigInt` from a `value: &str`, referencing the provided `alphabet`
     /// to determine what characters represent which digits. `FromStr` uses this method
     /// with the default alphabet `STANDARD_ALPHABET`.
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// assert_eq!(BigInt::parse("125", STANDARD_ALPHABET), Ok(BigInt::<10>::from(125)));
+    /// ```
     pub fn parse(value: &str, alphabet: &str) -> Result<Self, ParseError> {
         let mut digits = VecDeque::new();
         let (sign, chars) = match value.chars().next() {
@@ -183,10 +230,18 @@ impl<const BASE: usize> BigInt<BASE> {
     /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
     /// or an error if dividing by zero.
     ///
-    /// `b` - base
-    /// `d` - number of digits in quotient
-    /// time complexity: O(d * b)
-    /// memory complexity: O(d)
+    /// `b` - base\
+    /// `d` - number of digits in quotient\
+    /// Time complexity: `O(d * b)`\
+    /// Memory complexity: `O(d)`\
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// let a: BigInt<10> = 999_999_999.into();
+    /// let b = 56_789.into();
+    /// assert_eq!(a.div_rem_lowmem(b), Ok((17_609.into(), 2_498.into())));
+    /// ```
     pub fn div_rem_lowmem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
@@ -201,7 +256,7 @@ impl<const BASE: usize> BigInt<BASE> {
         let mut quot = unsafe { BigInt::from_raw_parts(vec![0; quot_digits]) };
         let mut addend =
             unsafe { BigInt::from_raw_parts([other.1, vec![0; quot_digits - 1]].concat()) };
-        let mut prod = unsafe { BigInt::from_raw_parts(vec![0]) };
+        let mut prod = BigInt::zero();
 
         for digit in 0..quot.1.len() {
             for digit_value in 0..BASE {
@@ -229,10 +284,18 @@ impl<const BASE: usize> BigInt<BASE> {
     /// or an error if dividing by zero. This algorithm has a different time complexity
     /// than `BigInt::div_rem_lowmem` which makes it faster for most use cases, but also uses more memory.
     ///
-    /// `b` - base
-    /// `d` - number of digits in quotient
-    /// time complexity: O(d * log(b))
-    /// memory complexity: O(d^2)
+    /// `b` - base\
+    /// `d` - number of digits in quotient\
+    /// Time complexity: `O(d * log(b))`\
+    /// Memory complexity: `O(d^2)`\
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// let a: BigInt<10> = 999_999_999.into();
+    /// let b = 56_789.into();
+    /// assert_eq!(a.div_rem(b), Ok((17_609.into(), 2_498.into())));
+    /// ```
     pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
@@ -245,7 +308,7 @@ impl<const BASE: usize> BigInt<BASE> {
         other.0 = false;
         let quot_digits = self.1.len() - other.1.len() + 1;
         let mut quot = unsafe { BigInt::from_raw_parts(vec![0; quot_digits]) };
-        let mut prod = unsafe { BigInt::from_raw_parts(vec![0]) };
+        let mut prod = BigInt::zero();
         let mut addend: BigInt<BASE> =
             unsafe { BigInt::from_raw_parts([other.1, vec![0; quot_digits - 1]].concat()) };
         let mut addends = Vec::new();
@@ -279,6 +342,7 @@ impl<const BASE: usize> BigInt<BASE> {
     }
 
     /// Convert a `BigInt` from its own base to another target base using the provided division function.
+    /// You should prefer to use one of either `BigInt::convert` or `BigInt::convert_lowmem` instead of this.
     fn convert_with<const TO: usize>(
         mut self,
         div_fn: impl Fn(BigInt<BASE>, BigInt<BASE>) -> Result<(BigInt<BASE>, BigInt<BASE>), BigIntError>,
@@ -297,11 +361,30 @@ impl<const BASE: usize> BigInt<BASE> {
     }
 
     /// Convert a `BigInt` from its own base to another target base.
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// assert_eq!(
+    ///     BigInt::<10>::from(99825).convert(),
+    ///     BigInt::<16>::from(99825)
+    /// );
+    /// ```
     pub fn convert<const TO: usize>(self) -> BigInt<TO> {
         self.convert_with(BigInt::div_rem)
     }
 
-    /// Convert a `BigInt` from its own base to another target base with lower memory usage, but greater time complexity.
+    /// Convert a `BigInt` from its own base to another target base using `BigInt::div_rem_lowmem`.
+    /// Has lower memory usage, but greater time complexity.
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// assert_eq!(
+    ///     BigInt::<10>::from(99825).convert_lowmem(),
+    ///     BigInt::<16>::from(99825)
+    /// );
+    /// ```
     pub fn convert_lowmem<const TO: usize>(self) -> BigInt<TO> {
         self.convert_with(BigInt::div_rem_lowmem)
     }
@@ -309,7 +392,7 @@ impl<const BASE: usize> BigInt<BASE> {
 
 impl<const BASE: usize> Default for BigInt<BASE> {
     fn default() -> Self {
-        BigInt(false, vec![0])
+        BigInt::zero()
     }
 }
 
@@ -318,12 +401,6 @@ impl<const BASE: usize> FromStr for BigInt<BASE> {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Self::parse(s, STANDARD_ALPHABET).map_err(BigIntError::ParseFailed)
-    }
-}
-
-impl<const BASE: usize> From<VecDeque<Digit>> for BigInt<BASE> {
-    fn from(value: VecDeque<Digit>) -> Self {
-        BigInt(false, value.into()).normalized()
     }
 }
 
@@ -337,7 +414,7 @@ impl<const BASE: usize> From<u128> for BigInt<BASE> {
             result.push_front(rem as Digit);
         }
         result.push_front(value as Digit);
-        result.into()
+        BigInt(false, result.into()).normalized()
     }
 }
 
@@ -450,9 +527,7 @@ impl<const BASE: usize> Add for BigInt<BASE> {
                     }
                 }
             }
-            let mut result: BigInt<BASE> = result.into();
-            result.0 = self.0;
-            result
+            BigInt(self.0, result.into()).normalized()
         }
     }
 }
@@ -524,9 +599,7 @@ impl<const BASE: usize> Sub for BigInt<BASE> {
                     }
                 }
             }
-            let mut result: BigInt<BASE> = result.into();
-            result.0 = self.0;
-            result
+            BigInt(self.0, result.into()).normalized()
         }
     }
 }
@@ -683,6 +756,13 @@ fn cmp(a: &[Digit], b: &[Digit]) -> Ordering {
 ///
 /// Note: probably slower than using a standalone
 /// library to perform this conversion. However, it's very neat :3
+/// 
+/// Note: may fail if the data begins with zeros.
+///
+/// ```
+/// use big_int::*;
+/// assert_eq!(base64_encode(b"Hello world!"), "SGVsbG8gd29ybGQh");
+/// ```
 pub fn base64_encode(bytes: &[u8]) -> String {
     let mut digits = bytes
         .into_iter()
@@ -701,6 +781,13 @@ pub fn base64_encode(bytes: &[u8]) -> String {
 ///
 /// Note: probably slower than using a standalone
 /// library to perform this conversion. However, again, it's very neat c:
+///
+/// Note: may fail if the data begins with zeros.
+/// 
+/// ```
+/// use big_int::*;
+/// assert_eq!(base64_decode("SGVsbG8gd29ybGQh").unwrap(), b"Hello world!");
+/// ```
 pub fn base64_decode(b64_string: impl Into<String>) -> Result<Vec<u8>, BigIntError> {
     let mut b64_string = b64_string.into();
     let padding = 4 - ((b64_string.len() - 1) % 4) - 1;

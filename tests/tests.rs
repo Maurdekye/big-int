@@ -272,7 +272,10 @@ mod tests {
     fn division_5() {
         let a = 30997532758381152_usize;
         let b = 16;
-        assert_eq!(Ok((BigInt::<10>::from(a / b), (a % b).into())), BigInt::from(a).div_rem(b.into()));
+        assert_eq!(
+            Ok((BigInt::<10>::from(a / b), (a % b).into())),
+            BigInt::from(a).div_rem(b.into())
+        );
     }
 
     #[test]

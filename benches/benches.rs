@@ -16,15 +16,21 @@ mod benches {
         let mut rng = thread_rng();
         bench.iter(|| {
             let a: BigInt<STRESS_TEST_BASE> = unsafe {
-                BigInt::from_raw_parts((0..STRESS_TEST_DIGITS).map(|_| rng.gen::<u16>() % STRESS_TEST_BASE as u16).collect())
-            }.normalized();
+                BigInt::from_raw_parts(
+                    (0..STRESS_TEST_DIGITS)
+                        .map(|_| rng.gen::<Digit>() % STRESS_TEST_BASE as Digit)
+                        .collect(),
+                )
+            }
+            .normalized();
             let b: BigInt<STRESS_TEST_BASE> = unsafe {
                 BigInt::from_raw_parts(
                     (0..STRESS_TEST_DIGITS / 2)
-                        .map(|_| rng.gen::<u16>() % STRESS_TEST_BASE as u16)
+                        .map(|_| rng.gen::<Digit>() % STRESS_TEST_BASE as Digit)
                         .collect(),
                 )
-            }.normalized();
+            }
+            .normalized();
             a.clone().div_rem(b.clone())
         });
     }
@@ -34,15 +40,21 @@ mod benches {
         let mut rng = thread_rng();
         bench.iter(|| {
             let a: BigInt<STRESS_TEST_BASE> = unsafe {
-                BigInt::from_raw_parts((0..STRESS_TEST_DIGITS).map(|_| rng.gen::<u16>() % STRESS_TEST_BASE as u16).collect())
-            }.normalized();
+                BigInt::from_raw_parts(
+                    (0..STRESS_TEST_DIGITS)
+                        .map(|_| rng.gen::<Digit>() % STRESS_TEST_BASE as Digit)
+                        .collect(),
+                )
+            }
+            .normalized();
             let b: BigInt<STRESS_TEST_BASE> = unsafe {
                 BigInt::from_raw_parts(
                     (0..STRESS_TEST_DIGITS / 2)
-                        .map(|_| rng.gen::<u16>() % STRESS_TEST_BASE as u16)
+                        .map(|_| rng.gen::<Digit>() % STRESS_TEST_BASE as Digit)
                         .collect(),
                 )
-            }.normalized();
+            }
+            .normalized();
             a.clone().div_rem_lowmem(b.clone())
         });
     }
