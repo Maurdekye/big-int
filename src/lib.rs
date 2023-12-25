@@ -104,14 +104,14 @@ impl<const BASE: usize> BigInt<BASE> {
     /// equal to the base, to preserve soundness.
     ///
     /// To construct a negative `BigInt` from raw parts, simply apply the negation
-    /// operator (`-`) afterwards. 
+    /// operator (`-`) afterwards.
     ///
-    /// ex: 
+    /// ex:
     /// ```
     /// use big_int::*;
-    /// 
+    ///
     /// assert_eq!(
-    ///     unsafe { -BigInt::<10>::from_raw_parts(vec![1, 5]) }, 
+    ///     unsafe { -BigInt::<10>::from_raw_parts(vec![1, 5]) },
     ///     (-15).into()
     /// );
     /// ```
@@ -194,11 +194,13 @@ impl<const BASE: usize> BigInt<BASE> {
     }
 
     /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero. 
-    /// 
-    /// Deprecated; use `div_rem` instead, as it's more efficient.
-    #[deprecated]
-    pub fn div_rem_(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
+    /// or an error if dividing by zero.
+    ///
+    /// `b` - base
+    /// `d` - number of digits in quotient
+    /// time complexity: O(d * b)
+    /// memory complexity: O(d)
+    pub fn div_rem_lowmem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
         }
@@ -238,7 +240,12 @@ impl<const BASE: usize> BigInt<BASE> {
 
     /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
     /// or an error if dividing by zero. This algorithm has a different time complexity
-    /// than `BigInt::div_rem` which makes it more efficient for most use cases.
+    /// than `BigInt::div_rem_lowmem` which makes it faster for most use cases, but also uses more memory.
+    ///
+    /// `b` - base
+    /// `d` - number of digits in quotient
+    /// time complexity: O(d * log(b))
+    /// memory complexity: O(d^2)
     pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
         if other.clone().normalized() == BigInt::zero() {
             return Err(BigIntError::DivisionByZero);
@@ -284,19 +291,32 @@ impl<const BASE: usize> BigInt<BASE> {
         Ok((quot.normalized(), rem))
     }
 
-    /// Convert a `BigInt` from its own base to another target base.
-    pub fn convert<const TO: usize>(mut self) -> BigInt<TO> {
+    /// Convert a `BigInt` from its own base to another target base using the provided division function.
+    fn convert_with<const TO: usize>(
+        mut self,
+        div_fn: impl Fn(BigInt<BASE>, BigInt<BASE>) -> Result<(BigInt<BASE>, BigInt<BASE>), BigIntError>,
+    ) -> BigInt<TO> {
         let sign = self.0;
         self.0 = false;
         let mut digits = VecDeque::new();
         let to_base = BigInt::<BASE>::from(TO);
         while self >= to_base {
-            let (quot, rem) = self.div_rem(to_base.clone()).unwrap();
+            let (quot, rem) = div_fn(self, to_base.clone()).unwrap();
             self = quot;
             digits.push_front(Digit::from(rem));
         }
         digits.push_front(Digit::from(self));
         BigInt::<TO>(sign, digits.into()).normalized()
+    }
+
+    /// Convert a `BigInt` from its own base to another target base.
+    pub fn convert<const TO: usize>(self) -> BigInt<TO> {
+        self.convert_with(BigInt::div_rem)
+    }
+
+    /// Convert a `BigInt` from its own base to another target base with lower memory usage, but greater time complexity.
+    pub fn convert_lowmem<const TO: usize>(self) -> BigInt<TO> {
+        self.convert_with(BigInt::div_rem_lowmem)
     }
 }
 

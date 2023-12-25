@@ -13,7 +13,7 @@ mod benches {
     const STRESS_TEST_DIGITS: usize = 1 << 2;
 
     #[bench]
-    fn fuzzy_div_rem_2_stress_test(bench: &mut Bencher) {
+    fn fuzzy_div_rem_stress_test(bench: &mut Bencher) {
         let mut rng = thread_rng();
         bench.iter(|| {
             let a: BigInt<STRESS_TEST_BASE> = unsafe {
@@ -31,7 +31,7 @@ mod benches {
     }
 
     #[bench]
-    fn fuzzy_div_rem_stress_test(bench: &mut Bencher) {
+    fn fuzzy_div_rem_lowmem_stress_test(bench: &mut Bencher) {
         let mut rng = thread_rng();
         bench.iter(|| {
             let a: BigInt<STRESS_TEST_BASE> = unsafe {
@@ -44,7 +44,7 @@ mod benches {
                         .collect(),
                 )
             }.normalized();
-            a.clone().div_rem_(b.clone())
+            a.clone().div_rem_lowmem(b.clone())
         });
     }
 }
