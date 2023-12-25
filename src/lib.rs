@@ -265,10 +265,9 @@ impl<const BASE: usize> BigInt<BASE> {
         for digit in 0..quot.1.len() {
             let mut digit_value = 0;
             for power in (0..addends.len()).rev() {
-                let new_digit_value = digit_value + (1 << power);
                 let new_prod = prod.clone() + addends[power].clone();
-                if new_prod < self {
-                    digit_value = new_digit_value;
+                if new_prod <= self {
+                    digit_value += 1 << power;
                     prod = new_prod;
                 }
                 addends[power].1.pop();

@@ -271,6 +271,13 @@ mod tests {
     }
 
     #[test]
+    fn division_5() {
+        let a = 30997532758381152_usize;
+        let b = 16;
+        assert_eq!(Ok((BigInt::<10>::from(a / b), (a % b).into())), BigInt::from(a).div_rem(b.into()));
+    }
+
+    #[test]
     fn division_by_zero() {
         let a: BigInt<10> = 999_999_999.into();
         let b = 0.into();
