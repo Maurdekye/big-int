@@ -1,16 +1,16 @@
 //! ## `big_int` - Arbitrary precision, arbitrary base integer arithmetic library.
-//! 
+//!
 //! ```
 //! use big_int::*;
-//! 
+//!
 //! let mut a: BigInt<10> = "9000000000000000000000000000000000000000".parse().unwrap();
-//! 
+//!
 //! a /= 13.into();
 //! assert_eq!(a, "692307692307692307692307692307692307692".parse().unwrap());
-//! 
+//!
 //! let mut b: BigInt<16> = a.convert();
 //! assert_eq!(b, "208D59C8D8669EDC306F76344EC4EC4EC".parse().unwrap());
-//! 
+//!
 //! b >>= 16.into();
 //! let c: BigInt<2> = b.convert();
 //! assert_eq!(c, "100000100011010101100111001000110110000110011010011110110111000011".parse().unwrap());
@@ -228,59 +228,6 @@ impl<const BASE: usize> BigInt<BASE> {
     }
 
     /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero.
-    ///
-    /// `b` - base\
-    /// `d` - number of digits in quotient\
-    /// Time complexity: `O(d * b)`\
-    /// Memory complexity: `O(d)`\
-    ///
-    /// ```
-    /// use big_int::*;
-    ///
-    /// let a: BigInt<10> = 999_999_999.into();
-    /// let b = 56_789.into();
-    /// assert_eq!(a.div_rem_lowmem(b), Ok((17_609.into(), 2_498.into())));
-    /// ```
-    pub fn div_rem_lowmem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
-        if other.clone().normalized() == BigInt::zero() {
-            return Err(BigIntError::DivisionByZero);
-        }
-        if other.1.len() > self.1.len() {
-            return Ok((BigInt(false, vec![0]), self));
-        }
-        let sign = self.0 != other.0;
-        self.0 = false;
-        other.0 = false;
-        let quot_digits = self.1.len() - other.1.len() + 1;
-        let mut quot = unsafe { BigInt::from_raw_parts(vec![0; quot_digits]) };
-        let mut addend =
-            unsafe { BigInt::from_raw_parts([other.1, vec![0; quot_digits - 1]].concat()) };
-        let mut prod = BigInt::zero();
-
-        for digit in 0..quot.1.len() {
-            for digit_value in 0..BASE {
-                let new_prod = prod.clone() + addend.clone();
-                if new_prod > self {
-                    quot.1[digit] = digit_value as Digit;
-                    break;
-                } else {
-                    prod = new_prod;
-                }
-            }
-            addend.1.pop();
-        }
-
-        quot.0 = sign;
-        let mut rem = self - prod;
-        if rem != BigInt::zero() {
-            rem.0 = sign;
-        }
-
-        Ok((quot.normalized(), rem))
-    }
-
-    /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
     /// or an error if dividing by zero. This algorithm has a different time complexity
     /// than `BigInt::div_rem_lowmem` which makes it faster for most use cases, but also uses more memory.
     ///
@@ -307,10 +254,9 @@ impl<const BASE: usize> BigInt<BASE> {
         self.0 = false;
         other.0 = false;
         let quot_digits = self.1.len() - other.1.len() + 1;
-        let mut quot = unsafe { BigInt::from_raw_parts(vec![0; quot_digits]) };
+        let mut quot = BigInt(false, vec![0; quot_digits]);
         let mut prod = BigInt::zero();
-        let mut addend: BigInt<BASE> =
-            unsafe { BigInt::from_raw_parts([other.1, vec![0; quot_digits - 1]].concat()) };
+        let mut addend = BigInt(false, [other.1, vec![0; quot_digits - 1]].concat());
         let mut addends = Vec::new();
         let mut power = 1;
         while power < BASE {
@@ -330,6 +276,58 @@ impl<const BASE: usize> BigInt<BASE> {
                 addends[power].1.pop();
             }
             quot.1[digit] = digit_value;
+        }
+
+        quot.0 = sign;
+        let mut rem = self - prod;
+        if rem != BigInt::zero() {
+            rem.0 = sign;
+        }
+
+        Ok((quot.normalized(), rem))
+    }
+
+    /// Divide one `BigInt` by another, returning the quotient & remainder as a pair,
+    /// or an error if dividing by zero.
+    ///
+    /// `b` - base\
+    /// `d` - number of digits in quotient\
+    /// Time complexity: `O(d * b)`\
+    /// Memory complexity: `O(d)`\
+    ///
+    /// ```
+    /// use big_int::*;
+    ///
+    /// let a: BigInt<10> = 999_999_999.into();
+    /// let b = 56_789.into();
+    /// assert_eq!(a.div_rem_lowmem(b), Ok((17_609.into(), 2_498.into())));
+    /// ```
+    pub fn div_rem_lowmem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
+        if other.clone().normalized() == BigInt::zero() {
+            return Err(BigIntError::DivisionByZero);
+        }
+        if other.1.len() > self.1.len() {
+            return Ok((BigInt(false, vec![0]), self));
+        }
+        let sign = self.0 != other.0;
+        self.0 = false;
+        other.0 = false;
+        let quot_digits = self.1.len() - other.1.len() + 1;
+        let mut quot = BigInt(false, vec![0; quot_digits]);
+        let mut addend = BigInt(false, [other.1, vec![0; quot_digits - 1]].concat());
+        let mut prod = BigInt::zero();
+
+        for digit in 0..quot.1.len() {
+            for digit_value in 0..BASE {
+                let new_prod = prod.clone() + addend.clone();
+                if new_prod > self {
+                    quot.1[digit] = digit_value as Digit;
+                    break;
+                } else {
+                    prod = new_prod;
+                }
+            }
+            addend.1.pop();
         }
 
         quot.0 = sign;
@@ -756,7 +754,7 @@ fn cmp(a: &[Digit], b: &[Digit]) -> Ordering {
 ///
 /// Note: probably slower than using a standalone
 /// library to perform this conversion. However, it's very neat :3
-/// 
+///
 /// Note: may fail if the data begins with zeros.
 ///
 /// ```
@@ -771,7 +769,7 @@ pub fn base64_encode(bytes: &[u8]) -> String {
         .collect::<Vec<_>>();
     let padding = 3 - ((digits.len() - 1) % 3) - 1;
     digits.extend(vec![0; padding]);
-    let data_as_int: BigInt<256> = unsafe { BigInt::from_raw_parts(digits) };
+    let data_as_int: BigInt<256> = BigInt(false, digits);
     let base64_data: BigInt<64> = data_as_int.convert();
     let base64_string = base64_data.display(BASE64_ALPHABET).unwrap();
     base64_string[..base64_string.len() - padding].to_string()
@@ -783,7 +781,7 @@ pub fn base64_encode(bytes: &[u8]) -> String {
 /// library to perform this conversion. However, again, it's very neat c:
 ///
 /// Note: may fail if the data begins with zeros.
-/// 
+///
 /// ```
 /// use big_int::*;
 /// assert_eq!(base64_decode("SGVsbG8gd29ybGQh").unwrap(), b"Hello world!");
