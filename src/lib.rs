@@ -97,7 +97,7 @@ pub type DoubleDigit = u16;
 /// `BigInt`: represents an arbitrary-size integer in base `BASE`.
 ///
 /// `BASE` may be anywhere from 2-256.
-/// If you would like to be able to represent a larger base than 65536, then increase `Digit`
+/// If you would like to be able to represent a larger base than 256, then increase `Digit`
 /// and `DoubleDigit` as needed, as high as `u64` + `u128`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BigInt<const BASE: usize>(bool, Vec<Digit>);
