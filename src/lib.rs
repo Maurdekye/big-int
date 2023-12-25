@@ -20,7 +20,6 @@ use std::{
     cmp::Ordering,
     collections::VecDeque,
     fmt::Display,
-    iter::once,
     ops::{
         Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, ShrAssign, Sub,
         SubAssign,
@@ -758,6 +757,7 @@ fn cmp(a: &[Digit], b: &[Digit]) -> Ordering {
 ///
 /// ```
 /// use big_int::*;
+/// 
 /// assert_eq!(base64_encode(b"Hello world!"), "SGVsbG8gd29ybGQh");
 /// ```
 pub fn base64_encode(bytes: &[u8]) -> String {
@@ -780,6 +780,7 @@ pub fn base64_encode(bytes: &[u8]) -> String {
 ///
 /// ```
 /// use big_int::*;
+/// 
 /// assert_eq!(base64_decode("SGVsbG8gd29ybGQh").unwrap(), b"Hello world!");
 /// ```
 pub fn base64_decode(b64_string: impl Into<String>) -> Result<Vec<u8>, BigIntError> {
