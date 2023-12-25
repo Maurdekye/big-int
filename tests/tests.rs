@@ -1,5 +1,3 @@
-#![allow(deprecated)]
-
 #[cfg(test)]
 mod tests {
 

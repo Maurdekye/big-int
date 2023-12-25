@@ -1,5 +1,4 @@
 #![feature(test)]
-#![allow(deprecated)]
 
 extern crate test;
 

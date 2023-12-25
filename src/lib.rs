@@ -3,28 +3,15 @@ use std::{
     collections::VecDeque,
     fmt::Display,
     ops::{
-        Add, AddAssign, Deref, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, ShrAssign,
+        Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, ShrAssign,
         Sub, SubAssign,
     },
     str::FromStr,
 };
 use thiserror::Error;
 
-#[derive(Clone, Copy)]
-pub struct Alphabet<'a>(&'a str);
-
-impl<'a> Deref for Alphabet<'a> {
-    type Target = str;
-
-    fn deref(&self) -> &'a Self::Target {
-        self.0
-    }
-}
-
-pub const STANDARD_ALPHABET: Alphabet =
-    Alphabet("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/");
-pub const BASE64_ALPHABET: Alphabet =
-    Alphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
+pub const STANDARD_ALPHABET: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
+pub const BASE64_ALPHABET: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum BigIntError {
@@ -126,7 +113,7 @@ impl<const BASE: usize> BigInt<BASE> {
 
     /// Convert a `BigInt` to a printable string using the provided alphabet `alphabet`.
     /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
-    pub fn display(&self, alphabet: Alphabet) -> Result<String, BigIntError> {
+    pub fn display(&self, alphabet: &str) -> Result<String, BigIntError> {
         let digits = self
             .1
             .iter()
@@ -167,7 +154,7 @@ impl<const BASE: usize> BigInt<BASE> {
     /// Parse a `BigInt` from a `value: &str`, referencing the provided `alphabet`
     /// to determine what characters represent which digits. `FromStr` uses this method
     /// with the default alphabet `STANDARD_ALPHABET`.
-    pub fn parse(value: &str, alphabet: Alphabet) -> Result<Self, ParseError> {
+    pub fn parse(value: &str, alphabet: &str) -> Result<Self, ParseError> {
         let mut digits = VecDeque::new();
         let (sign, chars) = match value.chars().next() {
             Some('-') => (true, value.chars().skip(1)),
