@@ -234,7 +234,7 @@ impl<const BASE: usize> BigInt<BASE> {
     /// `b` - base\
     /// `d` - number of digits in quotient\
     /// Time complexity: `O(d * log(b))`\
-    /// Memory complexity: `O(d^2)`\
+    /// Memory complexity: `O(d * log(b))`\
     ///
     /// ```
     /// use big_int::*;
