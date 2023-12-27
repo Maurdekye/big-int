@@ -13,9 +13,9 @@ pub const BASE64_ALPHABET: &str =
 /// library to perform this conversion. However, it's very neat :3
 ///
 /// ```
-/// use big_int::*;
+/// use big_int::base64::*;
 ///
-/// assert_eq!(base64_encode(b"Hello world!"), "SGVsbG8gd29ybGQh");
+/// assert_eq!(encode(b"Hello world!"), "SGVsbG8gd29ybGQh");
 /// ```
 pub fn encode(bytes: &[u8]) -> String {
     let mut digits = vec![255, 255, 255]
@@ -36,9 +36,9 @@ pub fn encode(bytes: &[u8]) -> String {
 /// library to perform this conversion. However, again, it's very neat c:
 ///
 /// ```
-/// use big_int::*;
+/// use big_int::base64::*;
 ///
-/// assert_eq!(base64_decode("SGVsbG8gd29ybGQh").unwrap(), b"Hello world!");
+/// assert_eq!(decode("SGVsbG8gd29ybGQh").unwrap(), b"Hello world!");
 /// ```
 pub fn decode(b64_string: impl Into<String>) -> Result<Vec<u8>, BigIntError> {
     let mut b64_string = b64_string.into();

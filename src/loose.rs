@@ -1,14 +1,12 @@
 use std::{collections::VecDeque, mem, vec};
 
-use crate::{BigIntBuilder, BigIntImplementation, Digit, Sign, BigInt};
+use crate::{BigInt, BigIntBuilder, BigIntImplementation, Digit, Sign};
 
 pub type LooseInt<const BASE: usize> = BigInt<BASE, Loose<BASE>>;
 
 /// `Loose`: represents an arbitrary-size integer in base `BASE`.
 ///
-/// `BASE` may be anywhere from 2-256.
-/// If you would like to be able to represent a larger base than 256, then increase `Digit`
-/// and `DoubleDigit` as needed, as high as `u64` + `u128`.
+/// `BASE` may be anywhere from 2-u64::MAX.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Loose<const BASE: usize> {
     sign: Sign,
@@ -25,15 +23,15 @@ impl<const BASE: usize> Loose<BASE> {
     /// operator (`-`) afterwards.
     ///
     /// ```
-    /// use big_int::loose::*;
+    /// use big_int::{loose::*, *};
     ///
     /// assert_eq!(
-    ///     unsafe { -Loose::<10>::from_raw_parts(vec![1, 5]) },
+    ///     -BigInt(unsafe { Loose::<10>::from_raw_parts(vec![1, 5]) }),
     ///     (-15).into()
     /// );
     /// ```
     pub unsafe fn from_raw_parts(digits: Vec<Digit>) -> Self {
-        let sign = Sign::Negative;
+        let sign = Sign::Positive;
         Loose { sign, digits }
     }
 
@@ -42,10 +40,10 @@ impl<const BASE: usize> Loose<BASE> {
     /// Can only be used to recreate the original int with the unsafe `from_raw_parts` fn.
     ///
     /// ```
-    /// use big_int::loose::*;
+    /// use big_int::{loose::*, *};
     ///
     /// assert_eq!(
-    ///     Loose::<10>::from(539).digits(),
+    ///     LooseInt::<10>::from(539).0.digits(),
     ///     vec![5, 3, 9]
     /// );
     /// ```
@@ -65,6 +63,13 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
         self.digits.get(digit).copied()
     }
 
+    /// ```
+    /// use big_int::{loose::*, *};
+    /// 
+    /// let mut a: Loose<10> = unsafe { Loose::from_raw_parts(vec![1, 2]) };
+    /// a.set_digit(1, 0);
+    /// assert_eq!(a, unsafe { Loose::from_raw_parts(vec![1, 0]) });
+    /// ```
     fn set_digit(&mut self, digit: usize, value: Digit) -> Option<Digit> {
         self.digits
             .get_mut(digit)
@@ -72,7 +77,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     }
 
     fn zero() -> Self {
-        let sign = Sign::Negative;
+        let sign = Sign::Positive;
         let digits = vec![0];
         Loose { sign, digits }
     }
@@ -86,9 +91,9 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     /// if the resulting number is zero.
     ///
     /// ```
-    /// use big_int::loose::*;
+    /// use big_int::{loose::*, *};
     ///
-    /// let n = unsafe { BigInt::<10>::from_raw_parts(vec![0, 0, 8, 3]) };
+    /// let n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     /// assert_eq!(n.normalized(), 83.into());
     /// ```
     fn normalized(self) -> Self {
@@ -109,31 +114,34 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     }
 
     fn set_sign(&mut self, sign: Sign) {
-        todo!()
+        self.sign = sign;
     }
 
     fn push_back(&mut self, digit: crate::Digit) {
-        todo!()
+        self.digits.push(digit);
     }
 
     fn push_front(&mut self, digit: crate::Digit) {
-        todo!()
+        self.digits.insert(0, digit);
     }
 
-    fn shr(self, amount: usize) -> Self {
-        todo!()
+    fn shr(mut self, amount: usize) -> Self {
+        self.shr_assign(amount);
+        self
     }
 
     fn shr_assign(&mut self, amount: usize) {
-        todo!()
+        self.digits =
+            self.digits[..self.digits.len().checked_sub(amount).unwrap_or_default()].to_vec();
     }
 
-    fn shl(self, amount: usize) -> Self {
-        todo!()
+    fn shl(mut self, amount: usize) -> Self {
+        self.shl_assign(amount);
+        self
     }
 
     fn shl_assign(&mut self, amount: usize) {
-        todo!()
+        self.digits.extend(vec![0; amount]);
     }
 
     fn iter<'a>(&'a self) -> Self::DigitIterator<'a> {
@@ -177,6 +185,7 @@ impl<const BASE: usize> DoubleEndedIterator for LooseIter<'_, BASE> {
     }
 }
 
+#[derive(Debug)]
 pub struct LooseBuilder<const BASE: usize> {
     sign: Sign,
     digits: VecDeque<Digit>,
@@ -185,7 +194,7 @@ pub struct LooseBuilder<const BASE: usize> {
 impl<const BASE: usize> BigIntBuilder<BASE> for LooseBuilder<BASE> {
     fn new() -> Self {
         LooseBuilder {
-            sign: Sign::Negative,
+            sign: Sign::Positive,
             digits: VecDeque::new(),
         }
     }
@@ -212,6 +221,6 @@ impl<const BASE: usize> From<LooseBuilder<BASE>> for Loose<BASE> {
     fn from(value: LooseBuilder<BASE>) -> Self {
         let sign = value.sign;
         let digits = value.digits.into();
-        Loose { sign, digits }
+        Loose { sign, digits }.normalized()
     }
 }

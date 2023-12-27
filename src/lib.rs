@@ -4,18 +4,18 @@
 //! ## `big_int` - Arbitrary precision, arbitrary base integer arithmetic library.
 //!
 //! ```
-//! use big_int::*;
+//! use big_int::{loose::*, BigInt, BigIntImplementation};
 //!
-//! let mut a: BigInt<10> = "9000000000000000000000000000000000000000".parse().unwrap();
+//! let mut a: LooseInt<10> = "9000000000000000000000000000000000000000".parse().unwrap();
 //!
 //! a /= 13.into();
 //! assert_eq!(a, "692307692307692307692307692307692307692".parse().unwrap());
 //!
-//! let mut b: BigInt<16> = a.convert();
+//! let mut b: LooseInt<16> = a.convert();
 //! assert_eq!(b, "208D59C8D8669EDC306F76344EC4EC4EC".parse().unwrap());
 //!
 //! b >>= 16.into();
-//! let c: BigInt<2> = b.convert();
+//! let c: LooseInt<2> = b.convert();
 //! assert_eq!(c, "100000100011010101100111001000110110000110011010011110110111000011".parse().unwrap());
 //! ```
 
@@ -32,9 +32,12 @@ use std::{
 use error::{BigIntError, ParseError};
 use get_back::GetBack;
 
+mod get_back;
+
+pub(crate) mod test_utils;
+
 pub mod base64;
 pub mod error;
-mod get_back;
 pub mod loose;
 pub mod tight;
 
@@ -43,6 +46,150 @@ pub const STANDARD_ALPHABET: &str =
 
 pub type Digit = u64;
 pub type DoubleDigit = u128;
+
+pub trait BigIntImplementation<const BASE: usize>
+where
+    Self: From<Self::Builder> + Clone + PartialEq + Eq + std::fmt::Debug,
+{
+    type Builder: BigIntBuilder<{ BASE }>;
+    type DigitIterator<'a>: DoubleEndedIterator<Item = Digit>
+    where
+        Self: 'a;
+
+    /// The length of the big int.
+    fn len(&self) -> usize;
+
+    /// Get the digit of the big int at position `digit`,
+    /// or None if the number does not have that many digits / the digit is negative.
+    fn get_digit(&self, digit: usize) -> Option<Digit>;
+
+    /// Set the digit of the big int to `value` at position `digit`.
+    /// Return `Some(Digit)` of the digit's existing value, or None if no digit was
+    /// set.
+    fn set_digit(&mut self, digit: usize, value: Digit) -> Option<Digit>;
+
+    /// The constant zero represented as a big int.
+    fn zero() -> Self;
+
+    /// The sign of the big int.
+    fn sign(&self) -> Sign;
+
+    /// The big int with the desired parity of `sign`.
+    fn with_sign(self, sign: Sign) -> Self;
+
+    /// Set the sign of the big int to `sign`.
+    fn set_sign(&mut self, sign: Sign);
+
+    fn push_back(&mut self, digit: Digit);
+    fn push_front(&mut self, digit: Digit);
+
+    fn shr(self, amount: usize) -> Self;
+    fn shr_assign(&mut self, amount: usize);
+
+    fn shl(self, amount: usize) -> Self;
+    fn shl_assign(&mut self, amount: usize);
+
+    fn iter<'a>(&'a self) -> Self::DigitIterator<'a>;
+
+    /// Return a normalized version of the int. Remove trailing zeros, and disable the parity flag
+    /// if the resulting number is zero.
+    ///
+    /// ```
+    /// use big_int::{loose::*, *};
+    ///
+    /// let n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    /// assert_eq!(n.normalized(), 83.into());
+    /// ```
+    fn normalized(self) -> Self;
+
+    /// Normalize a `Loose` big int in place. Remove trailing zeros, and disable the parity flag
+    /// if the resulting number is zero.
+    ///
+    /// ```
+    /// use big_int::{loose::*, *};
+    ///
+    /// let mut n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    /// n.normalize();
+    /// assert_eq!(n, 83.into());
+    /// ```
+    fn normalize(&mut self) {
+        *self = self.clone().normalized();
+    }
+
+    /// Convert a big int to a printable string using the provided alphabet `alphabet`.
+    /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
+    ///
+    /// ```
+    /// use big_int::{loose::*, *};
+    ///
+    /// assert_eq!(
+    ///     LooseInt::<10>::from(6012).display(STANDARD_ALPHABET).unwrap(),
+    ///     "6012".to_string()
+    /// );
+    /// ```
+    fn display(&self, alphabet: &str) -> Result<String, BigIntError> {
+        let digits = self
+            .iter()
+            .map(|digit| {
+                alphabet
+                    .chars()
+                    .nth(digit as usize)
+                    .ok_or(BigIntError::BaseTooHigh(BASE, alphabet.len()))
+            })
+            .collect::<Result<String, _>>()?;
+        if self.sign() == Sign::Negative {
+            Ok(format!("-{digits}"))
+        } else {
+            Ok(digits)
+        }
+    }
+
+    /// Parse a `Loose` big int from a `value: &str`, referencing the provided `alphabet`
+    /// to determine what characters represent which digits. `FromStr` uses this method
+    /// with the default alphabet `STANDARD_ALPHABET`.
+    ///
+    /// ```
+    /// use big_int::{loose::*, *};
+    ///
+    /// assert_eq!(LooseInt::parse("125", STANDARD_ALPHABET), Ok(LooseInt::<10>::from(125)));
+    /// ```
+    fn parse(value: &str, alphabet: &str) -> Result<Self, ParseError> {
+        let mut builder = Self::Builder::new();
+        let (sign, chars) = match value.chars().next() {
+            Some('-') => (Sign::Negative, value.chars().skip(1)),
+            Some(_) => (Sign::Positive, value.chars().skip(0)),
+            None => return Err(ParseError::NotEnoughCharacters),
+        };
+        for char in chars {
+            match alphabet.chars().position(|c| c == char) {
+                Some(pos) => {
+                    if pos >= BASE {
+                        return Err(ParseError::DigitTooLarge(char, pos, BASE));
+                    } else {
+                        builder.push_back(pos as Digit);
+                    }
+                }
+                None => return Err(ParseError::UnrecognizedCharacter(char)),
+            }
+        }
+        if builder.is_empty() {
+            Err(ParseError::NotEnoughCharacters)
+        } else {
+            Ok(builder.with_sign(sign).into())
+        }
+    }
+}
+
+pub trait BigIntBuilder<const BASE: usize>
+where
+    Self: std::fmt::Debug,
+{
+    fn new() -> Self;
+    fn push_front(&mut self, digit: Digit);
+    fn push_back(&mut self, digit: Digit);
+    fn is_empty(&self) -> bool;
+    fn with_sign(self, sign: Sign) -> Self;
+}
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Sign {
@@ -66,28 +213,10 @@ impl Mul for Sign {
 
     fn mul(self, rhs: Self) -> Self::Output {
         if self == rhs {
-            Self::Negative
-        } else {
             Self::Positive
+        } else {
+            Self::Negative
         }
-    }
-}
-
-pub trait BigIntBuilder<const BASE: usize> {
-    fn new() -> Self;
-    fn push_front(&mut self, digit: Digit);
-    fn push_back(&mut self, digit: Digit);
-    fn is_empty(&self) -> bool;
-    fn with_sign(self, sign: Sign) -> Self;
-}
-
-impl<const BASE: usize, BB, B> From<BB> for BigInt<BASE, B>
-where
-    BB: BigIntBuilder<{ BASE }>,
-    B: BigIntImplementation<{ BASE }> + From<BB>,
-{
-    fn from(value: BB) -> Self {
-        Self(value.into())
     }
 }
 
@@ -137,9 +266,9 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     /// Memory complexity: `O(d * log(b))`\
     ///
     /// ```
-    /// use big_int::loose::*;
+    /// use big_int::{loose::*, *};
     ///
-    /// let a: BigInt<10> = 999_999_999.into();
+    /// let a: LooseInt<10> = 999_999_999.into();
     /// let b = 56_789.into();
     /// assert_eq!(a.div_rem(b), Ok((17_609.into(), 2_498.into())));
     /// ```
@@ -156,7 +285,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
         let quot_digits = self.len() - other.len() + 1;
         let mut quot = B::Builder::new();
         let mut prod = Self::zero();
-        let mut addend = other.clone().shl(quot_digits);
+        let mut addend = other.clone().shl(quot_digits - 1);
         let mut addends = Vec::new();
         let mut power = 1;
         while power < BASE {
@@ -175,7 +304,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
                 }
                 addends[power].shr_assign(1);
             }
-            quot.push_front(digit_value);
+            quot.push_back(digit_value);
         }
 
         let mut rem = self - prod;
@@ -189,23 +318,21 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     /// Convert an int from its own base to another target base.
     ///
     /// ```
-    /// use big_int::loose::*;
+    /// use big_int::{loose::*, *};
     ///
     /// assert_eq!(
-    ///     BigInt::<10>::from(99825).convert(),
-    ///     BigInt::<16>::from(99825)
+    ///     LooseInt::<10>::from(99825).convert(),
+    ///     LooseInt::<16>::from(99825)
     /// );
     /// ```
     pub fn convert<const TO: usize, T: BigIntImplementation<{ TO }>>(mut self) -> BigInt<TO, T> {
+        let sign = self.sign();
+        let mut result = T::Builder::new();
         if BASE == TO {
-            let mut result = T::Builder::new();
             for digit in self.iter() {
                 result.push_back(digit);
             }
-            BigInt(result.with_sign(self.sign()).into())
         } else {
-            let sign = self.sign();
-            let mut result = T::Builder::new();
             self.set_sign(Sign::Positive);
             let to_base = Self::from(TO);
             while self >= to_base {
@@ -214,7 +341,23 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
                 result.push_front(Digit::from(rem));
             }
             result.push_front(Digit::from(self));
-            BigInt(result.with_sign(sign).into())
+        }
+        BigInt(result.with_sign(sign).into())
+    }
+
+    /// Compare the absolute magnitude of two big ints, ignoring their sign.
+    pub fn cmp_magnitude(&self, rhs: &Self) -> Ordering {
+        match self.len().cmp(&rhs.len()) {
+            Ordering::Equal => {
+                for (self_digit, rhs_digit) in self.iter().zip(rhs.iter()) {
+                    match self_digit.cmp(&rhs_digit) {
+                        Ordering::Equal => {}
+                        ordering => return ordering,
+                    }
+                }
+                Ordering::Equal
+            }
+            order => order,
         }
     }
 }
@@ -233,6 +376,16 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> DerefMut for BigInt<B
     }
 }
 
+impl<const BASE: usize, BB, B> From<BB> for BigInt<BASE, B>
+where
+    BB: BigIntBuilder<{ BASE }>,
+    B: BigIntImplementation<{ BASE }> + From<BB>,
+{
+    fn from(value: BB) -> Self {
+        Self(value.into())
+    }
+}
+
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> GetBack for BigInt<BASE, B> {
     type Item = Digit;
 
@@ -240,137 +393,6 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> GetBack for BigInt<BA
         self.len()
             .checked_sub(index)
             .and_then(|index| self.get_digit(index))
-    }
-}
-
-pub trait BigIntImplementation<const BASE: usize>
-where
-    Self: From<Self::Builder> + Clone + PartialEq + Eq,
-{
-    type Builder: BigIntBuilder<{ BASE }>;
-    type DigitIterator<'a>: DoubleEndedIterator<Item = Digit> where Self: 'a;
-
-    /// The length of the big int.
-    fn len(&self) -> usize;
-
-    /// Get the digit of the big int at position `digit`,
-    /// or None if the number does not have that many digits / the digit is negative.
-    fn get_digit(&self, digit: usize) -> Option<Digit>;
-
-    /// Set the digit of the big int to `value` at position `digit`.
-    /// Return `Some(Digit)` of the digit's existing value, or None if no digit was
-    /// set.
-    fn set_digit(&mut self, digit: usize, value: Digit) -> Option<Digit>;
-
-    /// The constant zero represented as a big int.
-    fn zero() -> Self;
-
-    /// The sign of the big int.
-    fn sign(&self) -> Sign;
-
-    /// The big int with the desired parity of `sign`.
-    fn with_sign(self, sign: Sign) -> Self;
-
-    /// Set the sign of the big int to `sign`.
-    fn set_sign(&mut self, sign: Sign);
-
-    fn push_back(&mut self, digit: Digit);
-    fn push_front(&mut self, digit: Digit);
-
-    fn shr(self, amount: usize) -> Self;
-    fn shr_assign(&mut self, amount: usize);
-
-    fn shl(self, amount: usize) -> Self;
-    fn shl_assign(&mut self, amount: usize);
-
-    fn iter<'a>(&'a self) -> Self::DigitIterator<'a>;
-
-    /// Return a normalized version of the int. Remove trailing zeros, and disable the parity flag
-    /// if the resulting number is zero.
-    ///
-    /// ```
-    /// use big_int::loose::*;
-    ///
-    /// let n = unsafe { BigInt::<10>::from_raw_parts(vec![0, 0, 8, 3]) };
-    /// assert_eq!(n.normalized(), 83.into());
-    /// ```
-    fn normalized(self) -> Self;
-
-    /// Normalize a `Loose` big int in place. Remove trailing zeros, and disable the parity flag
-    /// if the resulting number is zero.
-    ///
-    /// ```
-    /// use big_int::loose::*;
-    ///
-    /// let mut n = unsafe { BigInt::<10>::from_raw_parts(vec![0, 0, 8, 3]) };
-    /// n.normalize();
-    /// assert_eq!(n, 83.into());
-    /// ```
-    fn normalize(&mut self) {
-        *self = self.clone().normalized();
-    }
-
-    /// Convert a big int to a printable string using the provided alphabet `alphabet`.
-    /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
-    ///
-    /// ```
-    /// use big_int::loose::*;
-    ///
-    /// assert_eq!(
-    ///     BigInt::<10>::from(6012).display(STANDARD_ALPHABET).unwrap(),
-    ///     "6012".to_string()
-    /// );
-    /// ```
-    fn display(&self, alphabet: &str) -> Result<String, BigIntError> {
-        let digits = self
-            .iter()
-            .map(|digit| {
-                alphabet
-                    .chars()
-                    .nth(digit as usize)
-                    .ok_or(BigIntError::BaseTooHigh(BASE, alphabet.len()))
-            })
-            .collect::<Result<String, _>>()?;
-        if self.sign() == Sign::Negative {
-            Ok(format!("-{digits}"))
-        } else {
-            Ok(digits)
-        }
-    }
-
-    /// Parse a `Loose` big int from a `value: &str`, referencing the provided `alphabet`
-    /// to determine what characters represent which digits. `FromStr` uses this method
-    /// with the default alphabet `STANDARD_ALPHABET`.
-    ///
-    /// ```
-    /// use big_int::loose::*;
-    ///
-    /// assert_eq!(BigInt::parse("125", STANDARD_ALPHABET), Ok(BigInt::<10>::from(125)));
-    /// ```
-    fn parse(value: &str, alphabet: &str) -> Result<Self, ParseError> {
-        let mut builder = Self::Builder::new();
-        let (sign, chars) = match value.chars().next() {
-            Some('-') => (Sign::Negative, value.chars().skip(1)),
-            Some(_) => (Sign::Positive, value.chars().skip(0)),
-            None => return Err(ParseError::NotEnoughCharacters),
-        };
-        for char in chars {
-            match alphabet.chars().position(|c| c == char) {
-                Some(pos) => {
-                    if pos >= BASE {
-                        return Err(ParseError::DigitTooLarge(char, pos, BASE));
-                    } else {
-                        builder.push_back(pos as Digit);
-                    }
-                }
-                None => return Err(ParseError::UnrecognizedCharacter(char)),
-            }
-        }
-        if builder.is_empty() {
-            Err(ParseError::NotEnoughCharacters)
-        } else {
-            Ok(builder.with_sign(sign).into())
-        }
     }
 }
 
@@ -495,7 +517,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Neg for BigInt<BASE, 
 
     fn neg(self) -> Self::Output {
         let sign = -self.sign();
-        self.with_sign(-sign)
+        self.with_sign(sign)
     }
 }
 
@@ -503,9 +525,10 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Add for BigInt<BASE, 
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        if self.0 != rhs.0 {
+        if self.sign() != rhs.sign() {
             self - (-rhs)
         } else {
+            let sign = self.sign();
             let mut carry = 0;
             let mut result = B::Builder::new();
             for i in 1.. {
@@ -525,14 +548,14 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Add for BigInt<BASE, 
                     }
                 }
             }
-            result.with_sign(self.sign()).into()
+            result.with_sign(sign).into()
         }
     }
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> AddAssign for BigInt<BASE, B> {
     fn add_assign(&mut self, rhs: Self) {
-        if self.0 != rhs.0 {
+        if self.sign() != rhs.sign() {
             *self -= -rhs;
         } else {
             let self_len = self.len();
@@ -566,12 +589,14 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Sub for BigInt<BASE, 
     type Output = Self;
 
     fn sub(mut self, rhs: Self) -> Self::Output {
-        if self.0 != rhs.0 {
+        if self.sign() != rhs.sign() {
             self + (-rhs)
-        } else if rhs > self {
+        } else if rhs.cmp_magnitude(&self).is_gt() {
             -(rhs - self)
         } else {
+            let sign = self.sign();
             let mut result = B::Builder::new();
+            let self_len = self.len();
             for i in 1.. {
                 match (self.get_back(i), rhs.get_back(i)) {
                     (None, None) => break,
@@ -583,10 +608,10 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Sub for BigInt<BASE, 
                                 match self.get_back(j) {
                                     None => unreachable!("big int subtraction with overflow"),
                                     Some(0) => {
-                                        self.set_digit(j, (BASE - 1) as Digit);
+                                        self.set_digit(self_len - j, (BASE - 1) as Digit);
                                     }
                                     Some(digit) => {
-                                        self.set_digit(j, digit - 1);
+                                        self.set_digit(self_len - j, digit - 1);
                                         break;
                                     }
                                 }
@@ -597,16 +622,16 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Sub for BigInt<BASE, 
                     }
                 }
             }
-            result.with_sign(self.sign()).into()
+            result.with_sign(sign).into()
         }
     }
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> SubAssign for BigInt<BASE, B> {
     fn sub_assign(&mut self, mut rhs: Self) {
-        if self.0 != rhs.0 {
+        if self.sign() != rhs.sign() {
             *self += -rhs;
-        } else if rhs > *self {
+        } else if rhs.cmp_magnitude(self).is_gt() {
             rhs -= self.clone();
             *self = -rhs;
         } else {
@@ -622,10 +647,10 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> SubAssign for BigInt<
                                 match self.get_back(j) {
                                     None => unreachable!("big int subtraction with overflow"),
                                     Some(0) => {
-                                        self.set_digit(j, (BASE - 1) as Digit);
+                                        self.set_digit(self_len - j, (BASE - 1) as Digit);
                                     }
                                     Some(digit) => {
-                                        self.set_digit(j, digit - 1);
+                                        self.set_digit(self_len - j, digit - 1);
                                         break;
                                     }
                                 }
@@ -664,7 +689,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Mul for BigInt<BASE, 
                 break;
             }
         }
-        result.normalized().with_sign(sign)
+        result.with_sign(sign).normalized()
     }
 }
 
@@ -728,28 +753,9 @@ where
         match (self.sign(), other.sign()) {
             (Sign::Positive, Sign::Negative) => Ordering::Greater,
             (Sign::Negative, Sign::Positive) => Ordering::Less,
-            (Sign::Positive, Sign::Positive) => cmp(&self, &other),
-            (Sign::Negative, Sign::Negative) => cmp(&other, &self),
+            (Sign::Positive, Sign::Positive) => self.cmp_magnitude(other),
+            (Sign::Negative, Sign::Negative) => other.cmp_magnitude(self),
         }
-    }
-}
-
-/// Helper function used for comparing two big ints.
-fn cmp<const BASE: usize, B>(a: &BigInt<BASE, B>, b: &BigInt<BASE, B>) -> Ordering
-where
-    B: BigIntImplementation<{ BASE }>,
-{
-    match a.len().cmp(&b.len()) {
-        Ordering::Equal => {
-            for (a_digit, b_digit) in a.iter().zip(b.iter()) {
-                match a_digit.cmp(&b_digit) {
-                    Ordering::Equal => {}
-                    ordering => return ordering,
-                }
-            }
-            Ordering::Equal
-        }
-        order => order,
     }
 }
 
