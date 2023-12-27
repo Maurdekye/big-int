@@ -1,6 +1,6 @@
 [package]
 name = "big-int"
-version = "1.0.5"
+version = "2.0.0"
 edition = "2021"
 author = "Maurdekye"
 description = "Simple library for arbitrary-precision, arbitrary-base arithmetic, supporting arbitrarily large integers of any base from 2 to 256."
