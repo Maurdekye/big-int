@@ -1,6 +1,5 @@
 use std::{collections::VecDeque, mem, vec};
-
-use crate::{BigInt, BigIntBuilder, BigIntImplementation, Digit, Sign};
+use crate::prelude::*;
 
 pub type LooseInt<const BASE: usize> = BigInt<BASE, Loose<BASE>>;
 
@@ -23,7 +22,7 @@ impl<const BASE: usize> Loose<BASE> {
     /// operator (`-`) afterwards.
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// assert_eq!(
     ///     -BigInt(unsafe { Loose::<10>::from_raw_parts(vec![1, 5]) }),
@@ -31,7 +30,7 @@ impl<const BASE: usize> Loose<BASE> {
     /// );
     /// ```
     pub unsafe fn from_raw_parts(digits: Vec<Digit>) -> Self {
-        let sign = Sign::Positive;
+        let sign = Positive;
         Loose { sign, digits }
     }
 
@@ -40,7 +39,7 @@ impl<const BASE: usize> Loose<BASE> {
     /// Can only be used to recreate the original int with the unsafe `from_raw_parts` fn.
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// assert_eq!(
     ///     LooseInt::<10>::from(539).0.digits(),
@@ -64,7 +63,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     }
 
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     /// 
     /// let mut a: Loose<10> = unsafe { Loose::from_raw_parts(vec![1, 2]) };
     /// a.set_digit(1, 0);
@@ -77,7 +76,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     }
 
     fn zero() -> Self {
-        let sign = Sign::Positive;
+        let sign = Positive;
         let digits = vec![0];
         Loose { sign, digits }
     }
@@ -91,7 +90,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     /// if the resulting number is zero.
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// let n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     /// assert_eq!(n.normalized(), 83.into());
@@ -194,7 +193,7 @@ pub struct LooseBuilder<const BASE: usize> {
 impl<const BASE: usize> BigIntBuilder<BASE> for LooseBuilder<BASE> {
     fn new() -> Self {
         LooseBuilder {
-            sign: Sign::Positive,
+            sign: Positive,
             digits: VecDeque::new(),
         }
     }

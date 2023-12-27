@@ -2,11 +2,11 @@
 
 use std::collections::VecDeque;
 
-use crate::{BigIntBuilder, BigIntImplementation, Digit, Sign};
+use crate::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tight<const BASE: usize> {
-    sign: bool,
+    sign: Sign,
     data: Vec<u8>,
     digits: usize,
 }
@@ -16,7 +16,7 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
     type DigitIterator<'a> = TightIter<'a, BASE>;
 
     fn len(&self) -> usize {
-        todo!()
+        self.digits
     }
 
     fn get_digit(&self, digit: usize) -> Option<Digit> {
@@ -28,7 +28,11 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
     }
 
     fn zero() -> Self {
-        todo!()
+        Self {
+            sign: Positive,
+            data: vec![0],
+            digits: 1,
+        }
     }
 
     fn sign(&self) -> Sign {
@@ -95,7 +99,7 @@ impl<const BASE: usize> DoubleEndedIterator for TightIter<'_, BASE> {
 
 #[derive(Debug)]
 pub struct TightBuilder<const BASE: usize> {
-    sign: bool,
+    sign: Sign,
     data: VecDeque<u8>,
     start_offset: usize,
     digits: usize,

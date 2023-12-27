@@ -32,6 +32,15 @@ use std::{
 use error::{BigIntError, ParseError};
 use get_back::GetBack;
 
+use self::Sign::*;
+
+pub mod prelude {
+    pub use crate::*;
+    pub use crate::Sign::*;
+    pub use crate::loose::*;
+    pub use crate::tight::*;
+}
+
 mod get_back;
 
 pub(crate) mod test_utils;
@@ -95,7 +104,7 @@ where
     /// if the resulting number is zero.
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// let n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     /// assert_eq!(n.normalized(), 83.into());
@@ -106,7 +115,7 @@ where
     /// if the resulting number is zero.
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// let mut n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     /// n.normalize();
@@ -120,7 +129,7 @@ where
     /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// assert_eq!(
     ///     LooseInt::<10>::from(6012).display(STANDARD_ALPHABET).unwrap(),
@@ -137,7 +146,7 @@ where
                     .ok_or(BigIntError::BaseTooHigh(BASE, alphabet.len()))
             })
             .collect::<Result<String, _>>()?;
-        if self.sign() == Sign::Negative {
+        if self.sign() == Negative {
             Ok(format!("-{digits}"))
         } else {
             Ok(digits)
@@ -149,15 +158,15 @@ where
     /// with the default alphabet `STANDARD_ALPHABET`.
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// assert_eq!(LooseInt::parse("125", STANDARD_ALPHABET), Ok(LooseInt::<10>::from(125)));
     /// ```
     fn parse(value: &str, alphabet: &str) -> Result<Self, ParseError> {
         let mut builder = Self::Builder::new();
         let (sign, chars) = match value.chars().next() {
-            Some('-') => (Sign::Negative, value.chars().skip(1)),
-            Some(_) => (Sign::Positive, value.chars().skip(0)),
+            Some('-') => (Negative, value.chars().skip(1)),
+            Some(_) => (Positive, value.chars().skip(0)),
             None => return Err(ParseError::NotEnoughCharacters),
         };
         for char in chars {
@@ -266,7 +275,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     /// Memory complexity: `O(d * log(b))`\
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// let a: LooseInt<10> = 999_999_999.into();
     /// let b = 56_789.into();
@@ -280,8 +289,8 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
             return Ok((Self::zero(), self));
         }
         let sign = self.sign() * other.sign();
-        self.set_sign(Sign::Positive);
-        other.set_sign(Sign::Positive);
+        self.set_sign(Positive);
+        other.set_sign(Positive);
         let quot_digits = self.len() - other.len() + 1;
         let mut quot = B::Builder::new();
         let mut prod = Self::zero();
@@ -318,7 +327,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     /// Convert an int from its own base to another target base.
     ///
     /// ```
-    /// use big_int::{loose::*, *};
+    /// use big_int::prelude::*;
     ///
     /// assert_eq!(
     ///     LooseInt::<10>::from(99825).convert(),
@@ -333,7 +342,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
                 result.push_back(digit);
             }
         } else {
-            self.set_sign(Sign::Positive);
+            self.set_sign(Positive);
             let to_base = Self::from(TO);
             while self >= to_base {
                 let (quot, rem) = self.div_rem(to_base.clone()).unwrap();
@@ -443,7 +452,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<u128> for BigInt
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<i128> for BigInt<BASE, B> {
     fn from(value: i128) -> Self {
         if value < 0 {
-            Self::from((-value) as u128).with_sign(Sign::Negative)
+            Self::from((-value) as u128).with_sign(Negative)
         } else {
             Self::from(value as u128)
         }
@@ -476,7 +485,7 @@ macro_rules! int_from_bigint {
                         place = if place == 0 { 1 } else { place * BASE as $i };
                         total += (digit as $i) * place;
                     }
-                    if value.sign() == Sign::Negative {
+                    if value.sign() == Negative {
                         total = -total;
                     }
                     total
@@ -676,8 +685,8 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Mul for BigInt<BASE, 
 
     fn mul(mut self, mut rhs: Self) -> Self::Output {
         let sign = self.sign() * rhs.sign();
-        self.set_sign(Sign::Positive);
-        rhs.set_sign(Sign::Positive);
+        self.set_sign(Positive);
+        rhs.set_sign(Positive);
         let mut result = Self::zero();
         for i in 1.. {
             if let Some(digit) = self.get_back(i) {
@@ -751,10 +760,10 @@ where
 {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self.sign(), other.sign()) {
-            (Sign::Positive, Sign::Negative) => Ordering::Greater,
-            (Sign::Negative, Sign::Positive) => Ordering::Less,
-            (Sign::Positive, Sign::Positive) => self.cmp_magnitude(other),
-            (Sign::Negative, Sign::Negative) => other.cmp_magnitude(self),
+            (Positive, Negative) => Ordering::Greater,
+            (Negative, Positive) => Ordering::Less,
+            (Positive, Positive) => self.cmp_magnitude(other),
+            (Negative, Negative) => other.cmp_magnitude(self),
         }
     }
 }
