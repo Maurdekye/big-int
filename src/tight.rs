@@ -1,12 +1,14 @@
 //! ## `tight` - More compact BigInt, for better memory efficiency
 
-use std::{collections::VecDeque, io::empty};
+use std::collections::VecDeque;
 
 use crate::prelude::*;
 
 type Datum = u8;
 
 const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
+
+pub type TightInt<const BASE: usize> = BigInt<BASE, Tight<BASE>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tight<const BASE: usize> {
@@ -57,7 +59,9 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
                 bits_left_to_pull -= bits_to_take;
                 let datum_offset = bits_available_in_datum - bits_to_take;
                 let datum_mask = ((1 << bits_to_take) - 1) << datum_offset;
-                let piece_of_digit = ((self.data[datum_index] & datum_mask) as Digit >> datum_offset) << bits_left_to_pull;
+                let piece_of_digit = ((self.data[datum_index] & datum_mask) as Digit
+                    >> datum_offset)
+                    << bits_left_to_pull;
                 digit_value |= piece_of_digit;
             }
             Some(digit_value)
