@@ -69,10 +69,10 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     /// a.set_digit(1, 0);
     /// assert_eq!(a, unsafe { Loose::from_raw_parts(vec![1, 0]) });
     /// ```
-    fn set_digit(&mut self, digit: usize, value: Digit) -> Option<Digit> {
-        self.digits
-            .get_mut(digit)
-            .map(|digit| mem::replace(digit, value))
+    fn set_digit(&mut self, digit: usize, value: Digit) {
+        if let Some(digit) = self.digits.get_mut(digit) {
+            *digit = value;
+        }
     }
 
     fn zero() -> Self {

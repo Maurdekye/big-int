@@ -75,7 +75,7 @@ where
     /// Set the digit of the big int to `value` at position `digit`.
     /// Return `Some(Digit)` of the digit's existing value, or None if no digit was
     /// set.
-    fn set_digit(&mut self, digit: usize, value: Digit) -> Option<Digit>;
+    fn set_digit(&mut self, digit: usize, value: Digit);
 
     /// The constant zero represented as a big int.
     fn zero() -> Self;

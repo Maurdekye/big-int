@@ -42,11 +42,47 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
     }
 
     fn get_digit(&self, digit: usize) -> Option<Digit> {
-        todo!()
+        let mut digit_offset = self.start_offset + digit * Self::BITS_PER_DIGIT;
+        if digit_offset >= self.end_offset {
+            None
+        } else {
+            let mut digit_value = 0;
+            let mut bits_left_to_pull = Self::BITS_PER_DIGIT;
+            while bits_left_to_pull > 0 {
+                let datum_index = digit_offset / DATUM_SIZE;
+                let bit_in_datum = digit_offset % DATUM_SIZE;
+                let bits_available_in_datum = DATUM_SIZE - bit_in_datum;
+                let bits_to_take = bits_available_in_datum.min(bits_left_to_pull);
+                digit_offset += bits_to_take;
+                bits_left_to_pull -= bits_to_take;
+                let datum_offset = bits_available_in_datum - bits_to_take;
+                let datum_mask = ((1 << bits_to_take) - 1) << datum_offset;
+                let piece_of_digit = ((self.data[datum_index] & datum_mask) as Digit >> datum_offset) << bits_left_to_pull;
+                digit_value |= piece_of_digit;
+            }
+            Some(digit_value)
+        }
     }
 
-    fn set_digit(&mut self, digit: usize, value: Digit) -> Option<Digit> {
-        todo!()
+    fn set_digit(&mut self, digit: usize, value: Digit) {
+        let mut digit_offset = self.start_offset + digit * Self::BITS_PER_DIGIT;
+        if digit_offset < self.end_offset {
+            let mut bits_left_to_set = Self::BITS_PER_DIGIT;
+            while bits_left_to_set > 0 {
+                let datum_index = digit_offset / DATUM_SIZE;
+                let bit_in_datum = digit_offset % DATUM_SIZE;
+                let bits_left_in_datum = DATUM_SIZE - bit_in_datum;
+                let bits_to_set = bits_left_in_datum.min(bits_left_to_set);
+                digit_offset += bits_to_set;
+                bits_left_to_set -= bits_to_set;
+                let datum_offset = bits_left_in_datum - bits_to_set;
+                let piece_mask = ((1 << bits_to_set) - 1) << bits_left_to_set;
+                let piece_of_digit = ((value & piece_mask) >> bits_left_to_set) << datum_offset;
+                let datum_mask = ((1 << bits_to_set) - 1) << datum_offset;
+                self.data[datum_index] &= !datum_mask;
+                self.data[datum_index] |= piece_of_digit as Datum;
+            }
+        }
     }
 
     fn zero() -> Self {
@@ -240,9 +276,7 @@ impl<const BASE: usize> BigIntBuilder<{ BASE }> for TightBuilder<BASE> {
             self.start_offset -= bits_to_take;
             let mask_offset = Self::BITS_PER_DIGIT - bits_left_to_set;
             let digit_mask = ((1 << bits_to_take) - 1) << mask_offset;
-            bits_left_to_set = bits_left_to_set
-                .checked_sub(space_left_in_datum)
-                .unwrap_or_default();
+            bits_left_to_set -= bits_to_take;
             let piece_of_digit =
                 ((digit_mask & digit) >> mask_offset) << (DATUM_SIZE - space_left_in_datum);
             self.data[datum_index] |= piece_of_digit as Datum;
@@ -260,9 +294,7 @@ impl<const BASE: usize> BigIntBuilder<{ BASE }> for TightBuilder<BASE> {
             let space_left_in_datum = DATUM_SIZE - bit_in_datum;
             let bits_to_take = space_left_in_datum.min(bits_left_to_set);
             self.end_offset += bits_to_take;
-            bits_left_to_set = bits_left_to_set
-                .checked_sub(space_left_in_datum)
-                .unwrap_or_default();
+            bits_left_to_set -= bits_to_take;
             let digit_mask = ((1 << bits_to_take) - 1) << bits_left_to_set;
             let piece_of_digit = (((digit_mask & digit) >> bits_left_to_set)
                 << (DATUM_SIZE - bits_to_take))
@@ -425,5 +457,37 @@ mod tests {
         let builder = TightBuilder::<10>::new();
         let number: Tight<10> = builder.into();
         assert_eq!(number.data, vec![0]);
+    }
+
+    #[test]
+    fn get_digit() {
+        let mut builder = TightBuilder::<10>::new();
+        builder.push_front(4);
+        builder.push_front(3);
+        builder.push_front(2);
+        builder.push_front(1);
+        let int: Tight<10> = builder.into();
+        assert_eq!(int.get_digit(0), Some(1));
+        assert_eq!(int.get_digit(1), Some(2));
+        assert_eq!(int.get_digit(2), Some(3));
+        assert_eq!(int.get_digit(3), Some(4));
+        assert_eq!(int.get_digit(4), None);
+    }
+
+    #[test]
+    fn set_digit() {
+        let mut builder = TightBuilder::<10>::new();
+        builder.push_back(1);
+        builder.push_back(2);
+        builder.push_back(3);
+        builder.push_back(4);
+        let mut int: Tight<10> = builder.into();
+        int.set_digit(1, 8);
+        int.set_digit(2, 0);
+        assert_eq!(int.get_digit(0), Some(1));
+        assert_eq!(int.get_digit(1), Some(8));
+        assert_eq!(int.get_digit(2), Some(0));
+        assert_eq!(int.get_digit(3), Some(4));
+        assert_eq!(int.get_digit(4), None);
     }
 }
