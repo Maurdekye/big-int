@@ -82,8 +82,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     }
 
     fn with_sign(self, sign: Sign) -> Self {
-        let digits = self.digits;
-        Loose { sign, digits }
+        Loose { sign, ..self }
     }
 
     /// Return a normalized version of the int. Remove trailing zeros, and disable the parity flag
@@ -207,8 +206,7 @@ impl<const BASE: usize> BigIntBuilder<BASE> for LooseBuilder<BASE> {
     }
 
     fn with_sign(self, sign: Sign) -> Self {
-        let digits = self.digits;
-        LooseBuilder { sign, digits }
+        LooseBuilder { sign, ..self }
     }
 
     fn is_empty(&self) -> bool {
