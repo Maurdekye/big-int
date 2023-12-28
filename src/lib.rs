@@ -92,11 +92,23 @@ where
     fn push_back(&mut self, digit: Digit);
     fn push_front(&mut self, digit: Digit);
 
-    fn shr(self, amount: usize) -> Self;
-    fn shr_assign(&mut self, amount: usize);
+    fn shr(mut self, amount: usize) -> Self {
+        self.shr_assign(amount);
+        self
+    }
 
-    fn shl(self, amount: usize) -> Self;
-    fn shl_assign(&mut self, amount: usize);
+    fn shr_assign(&mut self, amount: usize) {
+        *self = self.clone().shr(amount);
+    }
+
+    fn shl(mut self, amount: usize) -> Self {
+        self.shl_assign(amount);
+        self
+    }
+
+    fn shl_assign(&mut self, amount: usize) {
+        *self = self.clone().shl(amount);
+    }
 
     fn iter<'a>(&'a self) -> Self::DigitIterator<'a>;
 
@@ -109,7 +121,10 @@ where
     /// let n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     /// assert_eq!(n.normalized(), 83.into());
     /// ```
-    fn normalized(self) -> Self;
+    fn normalized(mut self) -> Self {
+        self.normalize();
+        self
+    }
 
     /// Normalize a `Loose` big int in place. Remove trailing zeros, and disable the parity flag
     /// if the resulting number is zero.

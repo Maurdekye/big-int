@@ -18,6 +18,19 @@ pub struct Tight<const BASE: usize> {
 
 impl<const BASE: usize> Tight<BASE> {
     const BITS_PER_DIGIT: usize = bits_per_digit(BASE);
+
+    fn replace_with_builder(&mut self) -> TightBuilder<BASE> {
+        std::mem::replace(
+            self,
+            Self {
+                sign: Positive,
+                data: VecDeque::new(),
+                start_offset: 0,
+                end_offset: 0,
+            },
+        )
+        .into()
+    }
 }
 
 impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
@@ -58,36 +71,70 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
     }
 
     fn push_back(&mut self, digit: Digit) {
-        todo!()
+        let mut builder = self.replace_with_builder();
+        builder.push_back(digit);
+        *self = builder.into();
     }
+
     fn push_front(&mut self, digit: Digit) {
-        todo!()
+        let mut builder = self.replace_with_builder();
+        builder.push_front(digit);
+        *self = builder.into();
     }
 
-    fn shr(self, amount: usize) -> Self {
-        todo!()
-    }
     fn shr_assign(&mut self, amount: usize) {
-        todo!()
+        self.end_offset = self
+            .end_offset
+            .checked_sub(amount * Self::BITS_PER_DIGIT)
+            .unwrap_or_default()
+            .max(self.start_offset);
+        self.normalize();
     }
 
-    fn shl(self, amount: usize) -> Self {
-        todo!()
-    }
     fn shl_assign(&mut self, amount: usize) {
-        todo!()
+        self.end_offset += Self::BITS_PER_DIGIT * amount;
+        let new_len = self.end_offset.div_ceil(Self::BITS_PER_DIGIT);
+        let cur_len = self.data.len();
+        self.data.extend(vec![0; new_len - cur_len]);
     }
 
     fn iter<'a>(&'a self) -> Self::DigitIterator<'a> {
         TightIter {
             index: 0,
-            back_index: todo!(),
+            back_index: self.len(),
             int: self,
         }
     }
 
-    fn normalized(self) -> Self {
-        todo!()
+    fn normalized(mut self) -> Self {
+        while self.start_offset < self.end_offset && self.get_digit(0) == Some(0) {
+            self.start_offset += Self::BITS_PER_DIGIT;
+        }
+        if self.start_offset >= self.end_offset {
+            Self::zero()
+        } else if self.start_offset > 0 {
+            TightBuilder::<BASE>::from(self).aligned().into()
+        } else {
+            if self.data.len() * Self::BITS_PER_DIGIT - self.end_offset >= DATUM_SIZE {
+                self.data = self
+                    .data
+                    .into_iter()
+                    .take(self.end_offset.div_ceil(DATUM_SIZE))
+                    .collect();
+            }
+            self
+        }
+    }
+}
+
+impl<const BASE: usize> From<Tight<{ BASE }>> for TightBuilder<BASE> {
+    fn from(value: Tight<{ BASE }>) -> Self {
+        Self {
+            sign: value.sign,
+            data: value.data,
+            start_offset: value.start_offset,
+            end_offset: value.end_offset,
+        }
     }
 }
 
@@ -101,13 +148,23 @@ impl<const BASE: usize> Iterator for TightIter<'_, BASE> {
     type Item = Digit;
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        (self.index < self.back_index)
+            .then_some(&mut self.index)
+            .and_then(|index| {
+                *index += 1;
+                self.int.get_digit(*index - 1)
+            })
     }
 }
 
 impl<const BASE: usize> DoubleEndedIterator for TightIter<'_, BASE> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        todo!()
+        (self.back_index > self.index)
+            .then_some(&mut self.back_index)
+            .and_then(|index| {
+                *index -= 1;
+                self.int.get_digit(*index)
+            })
     }
 }
 
@@ -357,7 +414,10 @@ mod tests {
         builder.push_front(0b1111111111111);
         builder.push_front(0b1010101010101);
         let number: Tight<8192> = builder.into();
-        assert_eq!(number.data, vec![0b10101010, 0b10101111, 0b11111111, 0b11000000]);
+        assert_eq!(
+            number.data,
+            vec![0b10101010, 0b10101111, 0b11111111, 0b11000000]
+        );
     }
 
     #[test]

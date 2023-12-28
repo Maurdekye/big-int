@@ -1,5 +1,5 @@
-use std::{collections::VecDeque, mem, vec};
 use crate::prelude::*;
+use std::{collections::VecDeque, mem, vec};
 
 pub type LooseInt<const BASE: usize> = BigInt<BASE, Loose<BASE>>;
 
@@ -64,7 +64,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
 
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: Loose<10> = unsafe { Loose::from_raw_parts(vec![1, 2]) };
     /// a.set_digit(1, 0);
     /// assert_eq!(a, unsafe { Loose::from_raw_parts(vec![1, 0]) });
@@ -98,8 +98,8 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
         match self.digits.iter().position(|digit| *digit != 0) {
             None => Self::zero(),
             Some(pos @ 1..) => Loose {
-                sign: self.sign,
                 digits: self.digits[pos..].to_vec(),
+                ..self
             },
             _ => self,
         }
@@ -123,19 +123,9 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
         self.digits.insert(0, digit);
     }
 
-    fn shr(mut self, amount: usize) -> Self {
-        self.shr_assign(amount);
-        self
-    }
-
     fn shr_assign(&mut self, amount: usize) {
         self.digits =
             self.digits[..self.digits.len().checked_sub(amount).unwrap_or_default()].to_vec();
-    }
-
-    fn shl(mut self, amount: usize) -> Self {
-        self.shl_assign(amount);
-        self
     }
 
     fn shl_assign(&mut self, amount: usize) {
