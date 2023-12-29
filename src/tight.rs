@@ -1,11 +1,28 @@
-//! tightly packed big int implementation, for better memory efficiency
+//! tightly packed big int implementation, for better memory efficiency.
+//! 
+//! ```
+//! use big_int::prelude::*;
+//! 
+//! let mut a: TightInt<10> = 13.into();
+//! a *= 500.into();
+//! assert_eq!(a, 6500.into());
+//! 
+//! a.shr_assign(2);
+//! a += 17;
+//! assert_eq!(a, 82.into());
+//! ```
 
 use std::collections::VecDeque;
 
 use crate::prelude::*;
 
+/// Represents a single datum of information within a `Tight` int.
+/// The size of this value has no impact on the size of individual
+/// digits that the number can represent; it only impacts memory and
+/// runtime performance. Could be any unsigned type from u8-u128.
 type Datum = u8;
 
+/// Size of the chosen datum unit, in bits.
 const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 
 /// A tightly-packed arbitrary base big int.
@@ -36,8 +53,12 @@ pub struct Tight<const BASE: usize> {
 }
 
 impl<const BASE: usize> Tight<BASE> {
+    /// Number of bits required to store a single digit in the chosen `BASE`.
     const BITS_PER_DIGIT: usize = bits_per_digit(BASE);
 
+    /// Pull an owned builder of the `Tight` int from a mutable reference of itself; 
+    /// used for accessing pushing and alignment builder methods without copying the underlying
+    /// int.
     fn replace_with_builder(&mut self) -> TightBuilder<BASE> {
         std::mem::replace(
             self,
@@ -133,7 +154,7 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
         *self = builder.into();
     }
 
-    unsafe fn push_front(&mut self, digit: Digit) {
+    fn push_front(&mut self, digit: Digit) {
         let mut builder = self.replace_with_builder();
         builder.push_front(digit);
         *self = builder.aligned().into();
@@ -163,6 +184,9 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
         }
     }
 
+    /// Return a normalized version of the int. Remove trailing zeros, disable the parity flag
+    /// if the resulting number is zero, and align the internal bits to the beginning of the
+    /// data array.
     fn normalized(mut self) -> Self {
         while self.start_offset < self.end_offset && self.get_digit(0) == Some(0) {
             self.start_offset += Self::BITS_PER_DIGIT;
@@ -201,6 +225,18 @@ impl<const BASE: usize> From<Tight<{ BASE }>> for TightBuilder<BASE> {
     }
 }
 
+/// An iterator over the digits of a `TightInt`.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// use std::iter::Rev;
+/// 
+/// let a: TightInt<10> = 12345.into();
+/// let it: TightIter<10> = a.iter();
+/// let rev_it: Rev<TightIter<10>> = a.iter().rev();
+/// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
+/// assert_eq!(rev_it.collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
+/// ```
 pub struct TightIter<'a, const BASE: usize> {
     index: usize,
     back_index: usize,
@@ -231,6 +267,23 @@ impl<const BASE: usize> DoubleEndedIterator for TightIter<'_, BASE> {
     }
 }
 
+/// A builder for a `Tight` int.
+/// 
+/// You're most likely better off using one of the `From` implementations
+/// as opposed to directly building your int via a builder.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// 
+/// let mut a = TightBuilder::<10>::new();
+/// a.push_back(5);
+/// a.push_back(3);
+/// a.push_back(0);
+/// a.push_back(4);
+/// let a: Tight<10> = a.build();
+/// let a: TightInt<10> = BigInt::from(a);
+/// assert_eq!(a, 5304.into());
+/// ```
 #[derive(Debug)]
 pub struct TightBuilder<const BASE: usize> {
     sign: Sign,

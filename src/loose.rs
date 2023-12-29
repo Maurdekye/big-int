@@ -1,4 +1,16 @@
 //! loosely packed big int implementation.
+//! 
+//! ```
+//! use big_int::prelude::*;
+//! 
+//! let mut a: LooseInt<10> = 13.into();
+//! a *= 500.into();
+//! assert_eq!(a, 6500.into());
+//! 
+//! a.shr_assign(2);
+//! a += 17;
+//! assert_eq!(a, 82.into());
+//! ```
 
 use crate::prelude::*;
 use std::{collections::VecDeque, vec};
@@ -52,6 +64,7 @@ impl<const BASE: usize> Loose<BASE> {
 
 impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     type Builder = LooseBuilder<{ BASE }>;
+    type DigitIterator<'a> = LooseIter<'a, BASE>;
 
     fn len(&self) -> usize {
         self.digits.len()
@@ -61,13 +74,6 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
         self.digits.get(digit).copied()
     }
 
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let mut a: Loose<10> = unsafe { Loose::from_raw_parts(vec![1, 2]) };
-    /// a.set_digit(1, 0);
-    /// assert_eq!(a, unsafe { Loose::from_raw_parts(vec![1, 0]) });
-    /// ```
     fn set_digit(&mut self, digit: usize, value: Digit) {
         if let Some(digit) = self.digits.get_mut(digit) {
             *digit = value;
@@ -104,8 +110,6 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
         }
     }
 
-    type DigitIterator<'a> = LooseIter<'a, BASE>;
-
     fn sign(&self) -> Sign {
         self.sign
     }
@@ -118,7 +122,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
         self.digits.push(digit);
     }
 
-    unsafe fn push_front(&mut self, digit: crate::Digit) {
+    fn push_front(&mut self, digit: crate::Digit) {
         self.digits.insert(0, digit);
     }
 
@@ -140,6 +144,18 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     }
 }
 
+/// An iterator over the digits of a `LooseInt`.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// use std::iter::Rev;
+/// 
+/// let a: LooseInt<10> = 12345.into();
+/// let it: LooseIter<10> = a.iter();
+/// let rev_it: Rev<LooseIter<10>> = a.iter().rev();
+/// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
+/// assert_eq!(rev_it.collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
+/// ```
 pub struct LooseIter<'a, const BASE: usize> {
     index: usize,
     back_index: usize,
@@ -172,6 +188,23 @@ impl<const BASE: usize> DoubleEndedIterator for LooseIter<'_, BASE> {
     }
 }
 
+/// A builder for a `Loose` int.
+/// 
+/// You're most likely better off using one of the `From` implementations
+/// as opposed to directly building your int via a builder.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// 
+/// let mut a = LooseBuilder::<10>::new();
+/// a.push_back(5);
+/// a.push_back(3);
+/// a.push_back(0);
+/// a.push_back(4);
+/// let a: Loose<10> = a.build();
+/// let a: LooseInt<10> = BigInt::from(a);
+/// assert_eq!(a, 5304.into());
+/// ```
 #[derive(Debug)]
 pub struct LooseBuilder<const BASE: usize> {
     sign: Sign,

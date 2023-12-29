@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+/// Represents an error with regards to a big int operation.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum BigIntError {
     #[error("base too large: number has {0} digits, alphabet can only represent {1} digits")]
@@ -10,6 +11,7 @@ pub enum BigIntError {
     DivisionByZero,
 }
 
+/// Represents an error with regards to a big int parsing operation.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ParseError {
     #[error("unrecognized character: {0:?}")]

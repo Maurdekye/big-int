@@ -2,6 +2,7 @@
 
 use crate::{error::BigIntError, loose::LooseInt, BigInt, BigIntImplementation, Digit};
 
+/// Base64 alphabet; used for encoding & decoding numbers to and from base64.
 pub const BASE64_ALPHABET: &str =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 

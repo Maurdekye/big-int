@@ -1,4 +1,8 @@
-#[macro_export]
+//! Various utility macros for testing.
+
+/// Create a list of pairs of randomly generated ints, constrained 
+/// by the sizes of the associated int types passed.
+#[macro_export(local_inner_macros)]
 macro_rules! test_pairs {
     ($([$t:ty; $n:literal]),*) => {
         {
@@ -11,7 +15,9 @@ macro_rules! test_pairs {
     };
 }
 
-#[macro_export]
+/// Create a list of randomly generated ints, constrained 
+/// by the sizes of the associated int types passed.
+#[macro_export(local_inner_macros)]
 macro_rules! test_values {
     ($([$t:ty; $n:literal]),*) => {
         {
@@ -23,9 +29,10 @@ macro_rules! test_values {
     };
 }
 
-#[macro_export]
-macro_rules! printbytes {
+/// Format out a vec of bytes as a list of binary numbers.
+#[macro_export(local_inner_macros)]
+macro_rules! bytestr {
     ($d:expr) => {
-        println!("{}", $d.iter().map(|d| format!("{d:08b}")).collect::<Vec<_>>().join(" "));
+        $d.iter().map(|d| format!("{d:08b}")).collect::<Vec<_>>().join(" ");
     }
 }
