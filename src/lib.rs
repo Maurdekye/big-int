@@ -73,7 +73,7 @@ pub const STANDARD_ALPHABET: &str =
 pub type Digit = u64;
 pub(crate) type DoubleDigit = u128;
 
-/// Safely create a bitmask of `n` bits in size shifted 
+/// Safely create a bitmask of `n` bits in size shifted
 /// to the right side of the number without overflowing.
 #[macro_export(local_inner_macros)]
 macro_rules! mask {
@@ -83,16 +83,16 @@ macro_rules! mask {
 }
 
 /// A big int implementation.
-/// 
+///
 /// Encapsulates all the underlying mechanics necessary to store and retrieve the individual
 /// digits of a big int.
-/// 
+///
 /// Arithmetic cannot be performed directly on a big int implementation; it must be wrapped in
 /// a `BigInt` first.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let mut a = TightBuilder::<10>::new();
 /// a.push_back(1);
 /// a.push_back(0);
@@ -110,10 +110,10 @@ where
         Self: 'a;
 
     /// The length of the big int in digits.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 211864.into();
     /// assert_eq!(a.len(), 6);
     /// ```
@@ -121,11 +121,11 @@ where
 
     /// Get the digit of the big int at position `digit`,
     /// or None if the number does not have that many digits.
-    /// 
-    /// 
+    ///
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 12345.into();
     /// assert_eq!(a.get_digit(2), Some(3));
     /// assert_eq!(a.get_digit(6), None);
@@ -133,13 +133,13 @@ where
     fn get_digit(&self, digit: usize) -> Option<Digit>;
 
     /// Set the digit of the big int to `value` at position `digit`.
-    /// 
+    ///
     /// If the set digit causes the leftmost digit of the number to be zero,
     /// the number will become denormal, and should be normalized before being used.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: TightInt<10> = 10000.into();
     /// a.set_digit(1, 7);
     /// a.set_digit(4, 9);
@@ -159,7 +159,7 @@ where
     fn zero() -> Self;
 
     /// The sign of the big int.
-    /// 
+    ///
     /// The value zero represented as a big int.
     ///
     /// ```
@@ -194,10 +194,10 @@ where
     fn set_sign(&mut self, sign: Sign);
 
     /// Append a digit to the right side of the int. Equivalent to `(int << 1) + digit`
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: TightInt<10> = 6.into();
     /// a.push_back(1);
     /// assert_eq!(a, 61.into());
@@ -205,12 +205,12 @@ where
     fn push_back(&mut self, digit: Digit);
 
     /// Append a digit to the left side of the int. May cause the resulting
-    /// int to be denormalized; make sure to call .normalize() afterwards 
+    /// int to be denormalized; make sure to call .normalize() afterwards
     /// to prevent undefined functionality.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: TightInt<10> = 6.into();
     /// a.push_front(1);
     /// assert_eq!(a.normalized(), 16.into());
@@ -222,10 +222,10 @@ where
     /// Note: works in powers of BASE, not in powers of 2.
     ///
     /// Defined in terms of `shr_assign`; at least one of `shr` or `shr_assign` must be defined.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 600.into();
     /// assert_eq!(a.shr(2), 6.into());
     /// ```
@@ -239,10 +239,10 @@ where
     /// Note: works in powers of BASE, not in powers of 2.
     ///
     /// Defined in terms of `shr`; at least one of `shr` or `shr_assign` must be defined.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: TightInt<10> = 600.into();
     /// a.shr_assign(2);
     /// assert_eq!(a, 6.into());
@@ -256,10 +256,10 @@ where
     /// Note: works in powers of BASE, not in powers of 2.
     ///
     /// Defined in terms of `shl_assign`; at least one of `shl` or `shl_assign` must be defined.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 3.into();
     /// assert_eq!(a.shl(2), 300.into());
     /// ```
@@ -273,10 +273,10 @@ where
     /// Note: works in powers of BASE, not in powers of 2.
     ///
     /// Defined in terms of `shl`; at least one of `shl` or `shl_assign` must be defined.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: TightInt<10> = 3.into();
     /// a.shl_assign(2);
     /// assert_eq!(a, 300.into());
@@ -286,12 +286,12 @@ where
     }
 
     /// Iterate over the digits of the int.
-    /// 
+    ///
     /// `impl`s `DoubleEndedIterator`, so digits can be iterated over forward or in reverse.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 12345.into();
     /// assert_eq!(a.iter().collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
     /// assert_eq!(a.iter().rev().collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
@@ -304,10 +304,10 @@ where
     /// * is not negative zero
     /// Additionally, `TightInt`s will be aligned to the beginning of their data segment
     /// when normalized.
-    /// 
+    ///
     /// Defined in terms of `normalize`; at least one of `normalize` or `normalized`
     /// must be defined.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
     ///
@@ -319,13 +319,13 @@ where
         self
     }
 
-    /// Normalize a big int in place. 
+    /// Normalize a big int in place.
     /// * has no trailing zeros
     /// * has at least one digit
     /// * is not negative zero
     /// Additionally, `TightInt`s will be aligned to the beginning of their data segment
     /// when normalized.
-    /// 
+    ///
     /// Defined in terms of `normalized`; at least one of `normalize` or `normalized`
     /// must be defined.
     ///
@@ -404,15 +404,26 @@ where
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Normalize for B {
+    fn normalized(mut self) -> Self {
+        self.normalize();
+        self
+    }
+
+    fn normalize(&mut self) {
+        *self = self.clone().normalized();
+    }
+}
+
 /// A builder for a big int. Use this to construct a big int one digit at a time,
 /// then call .build() to finalize the builder.
-/// 
+///
 /// You're most likely better off using one of the `From` implementations
 /// as opposed to directly building your int via a builder.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let mut a = TightBuilder::<10>::new();
 /// a.push_back(5);
 /// a.push_back(3);
@@ -427,10 +438,10 @@ where
     Self: std::fmt::Debug,
 {
     /// Create a new builder.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a = TightBuilder::<10>::new();
     /// a.push_back(5);
     /// assert_eq!(BigInt::from(a.build()), 5.into());
@@ -438,10 +449,10 @@ where
     fn new() -> Self;
 
     /// Push a new digit to the end of the int.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a = TightBuilder::<10>::new();
     /// a.push_back(5);
     /// a.push_back(6);
@@ -450,10 +461,10 @@ where
     fn push_front(&mut self, digit: Digit);
 
     /// Push a new digit to the beginning of the int.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a = TightBuilder::<10>::new();
     /// a.push_front(5);
     /// a.push_front(6);
@@ -462,10 +473,10 @@ where
     fn push_back(&mut self, digit: Digit);
 
     /// Check if the builder is empty.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a = TightBuilder::<10>::new();
     /// assert!(a.is_empty());
     /// a.push_front(5);
@@ -474,10 +485,10 @@ where
     fn is_empty(&self) -> bool;
 
     /// The builder with the given sign.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a = TightBuilder::<10>::new();
     /// a.push_back(9);
     /// assert_eq!(BigInt::from(a.with_sign(Negative).build()), (-9).into());
@@ -486,10 +497,10 @@ where
 }
 
 /// Trait that represents the final build step of a BigIntBuilder.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let mut a = TightBuilder::<10>::new();
 /// a.push_back(5);
 /// a.push_back(3);
@@ -499,12 +510,11 @@ where
 /// assert_eq!(BigInt::from(a), 5304.into());
 /// ```
 pub trait Build<B> {
-
     /// Build the value and return the finalized result.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a = TightBuilder::<10>::new();
     /// a.push_back(5);
     /// a.push_back(3);
@@ -517,10 +527,10 @@ pub trait Build<B> {
 }
 
 /// Represents the sign of a big int; either Positive or Negative.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let mut a: TightInt<10> = 18.into();
 /// let s = a.sign();
 /// assert_eq!(s, Positive);
@@ -556,6 +566,41 @@ impl Mul for Sign {
         }
     }
 }
+
+pub trait Normalize: Clone {
+
+    fn normalized(mut self) -> Self {
+        self.normalize();
+        self
+    }
+    
+    fn normalize(&mut self) {
+        *self = self.clone().normalized();
+    }
+}
+
+pub struct Denormal<N: Normalize>(N);
+
+impl<N: Normalize> Denormal<N> {
+    pub fn unwrap(self) -> N {
+        self.0.normalized()
+    }
+}
+
+impl<N: Normalize> Deref for Denormal<N> {
+    type Target = N;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<N: Normalize> DerefMut for Denormal<N> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 
 /// A big int.
 ///
@@ -633,7 +678,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 600.into();
     /// assert_eq!(a.shr(2), 6.into());
     /// ```
@@ -647,29 +692,12 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 600.into();
     /// assert_eq!(a.shr(2), 6.into());
     /// ```
     pub fn shr_assign(&mut self, amount: usize) {
         self.0.shr_assign(amount)
-    }
-
-    /// Return a normalized version of the int. A normalized int:
-    /// * has no trailing zeros
-    /// * has at least one digit
-    /// * is not negative zero
-    /// Additionally, `TightInt`s will be aligned to the beginning of their data segment
-    /// when normalized.
-    /// 
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
-    /// assert_eq!(n.normalized(), 83.into());
-    /// ```
-    pub fn normalized(self) -> Self {
-        Self(self.0.normalized())
     }
 
     /// Parse a big int from a `value: &str`, referencing the provided `alphabet`
@@ -784,18 +812,20 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     /// assert!(a.cmp_magnitude(&b).is_gt());
     /// ```
     pub fn cmp_magnitude(&self, rhs: &Self) -> Ordering {
-        match self.len().cmp(&rhs.len()) {
-            Ordering::Equal => {
-                for (self_digit, rhs_digit) in self.iter().zip(rhs.iter()) {
-                    match self_digit.cmp(&rhs_digit) {
-                        Ordering::Equal => {}
-                        ordering => return ordering,
-                    }
-                }
-                Ordering::Equal
+        for i in (1..self.len().max(rhs.len())).rev() {
+            match (self.get_back(i), rhs.get_back(i)) {
+                (Some(1..=9), None) => return Ordering::Greater,
+                (None, Some(1..=9)) => return Ordering::Less,
+                (self_digit, rhs_digit) => match self_digit
+                    .unwrap_or_default()
+                    .cmp(&rhs_digit.unwrap_or_default())
+                {
+                    Ordering::Equal => {}
+                    ordering => return ordering,
+                },
             }
-            order => order,
         }
+        Ordering::Equal
     }
 }
 
@@ -810,6 +840,29 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Deref for BigInt<BASE
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> DerefMut for BigInt<BASE, B> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Normalize for BigInt<BASE, B> {
+    /// Return a normalized version of the int. A normalized int:
+    /// * has no trailing zeros
+    /// * has at least one digit
+    /// * is not negative zero
+    /// Additionally, `TightInt`s will be aligned to the beginning of their data segment
+    /// when normalized.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    /// assert_eq!(n.normalized(), 83.into());
+    /// ```
+    fn normalized(self) -> Self {
+        Self(self.0.normalized())
+    }
+
+    fn normalize(&mut self) {
+        self.0.normalize();
     }
 }
 
@@ -1197,10 +1250,10 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Shl for BigInt<BASE, 
     ///
     /// Note: using the shift operator is generally not encouraged, as it's
     /// less efficient than using `BigInt::shl` directly.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 3.into();
     /// assert_eq!(a << 2.into(), 300.into());
     /// ```
@@ -1210,17 +1263,16 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Shl for BigInt<BASE, 
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> ShlAssign for BigInt<BASE, B> {
-
     /// Multiply the int by BASE^amount in place.
     ///
     /// Note: works in powers of BASE, not in powers of 2.
     ///
     /// Note: using the shift operator is generally not encouraged, as it's
     /// less efficient than using `BigInt::shl_assign` directly.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: TightInt<10> = 3.into();
     /// a <<= 2.into();
     /// assert_eq!(a, 300.into());
@@ -1239,10 +1291,10 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Shr for BigInt<BASE, 
     ///
     /// Note: using the shift operator is generally not encouraged, as it's
     /// less efficient than using `BigInt::shr` directly.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = 600.into();
     /// assert_eq!(a >> 2.into(), 6.into());
     /// ```
@@ -1252,17 +1304,16 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Shr for BigInt<BASE, 
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> ShrAssign for BigInt<BASE, B> {
-    
     /// Divide the int by BASE^amount in place.
     ///
     /// Note: works in powers of BASE, not in powers of 2.
     ///
     /// Note: using the shift operator is generally not encouraged, as it's
     /// less efficient than using `BigInt::shr_assign` directly.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: TightInt<10> = 600.into();
     /// a >>= 2.into();
     /// assert_eq!(a, 6.into());

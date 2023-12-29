@@ -4,10 +4,7 @@ extern crate test;
 
 #[cfg(test)]
 mod benches {
-    use big_int::{
-        loose::{Loose, LooseInt},
-        BigInt, Digit,
-    };
+    use big_int::prelude::*;
     use rand::prelude::*;
     use test::Bencher;
 
