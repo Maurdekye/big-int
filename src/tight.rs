@@ -8,21 +8,21 @@ type Datum = u8;
 
 const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 
-/// A tightly-packed arbitrary base big int. 
+/// A tightly-packed arbitrary base big int.
 /// See `Tight<BASE>` for implementation details.
 pub type TightInt<const BASE: usize> = BigInt<BASE, Tight<BASE>>;
 
-/// A tightly-packed arbitrary base big int implementation. 
-/// Supports any base from 2-u64::MAX. 
-/// 
+/// A tightly-packed arbitrary base big int implementation.
+/// Supports any base from 2-u64::MAX.
+///
 /// In this implementation, bits are tightly packed against one another,
 /// requiring only `ceil(log_2(BASE))` bits per digit. Signficiantly more space-efficient for
 /// smaller bases compared to the loose implementation. However, the extra indirection contributes
 /// to some added overhead.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let a: TightInt<10> = 593.into();
 /// let b = a * 96.into();
 /// assert_eq!(b, 56928.into());
@@ -537,4 +537,21 @@ mod tests {
         assert_eq!(int.get_digit(3), Some(4));
         assert_eq!(int.get_digit(4), None);
     }
+
+    // macro_rules! base_conv_print {
+    //     ($d:expr; $($b:literal),*) => {
+    //         let a: TightInt<256> = $d.into();
+    //         printbytes!(a.data);
+    //         $(
+    //             let a: TightInt<$b> = a.convert();
+    //             println!("{}: ", $b);
+    //             printbytes!(a.data);
+    //         )*
+    //     };
+    // }
+
+    // #[test]
+    // fn conversion_3() {
+    //     base_conv_print!([255, 0, 0, 0]; 128, 64, 32, 16, 8, 4, 2);
+    // }
 }

@@ -524,6 +524,24 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<Vec<Digit>> for 
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<&[Digit]> for BigInt<BASE, B> {
+    fn from(value: &[Digit]) -> Self {
+        value.into_iter().copied().collect()
+    }
+}
+
+impl<const BASE: usize, const N: usize, B: BigIntImplementation<{ BASE }>> From<[Digit; N]> for BigInt<BASE, B> {
+    fn from(value: [Digit; N]) -> Self {
+        value.into_iter().collect()
+    }
+}
+
+impl<const N: usize, B: BigIntImplementation<256>> From<&[u8; N]> for BigInt<256, B> {
+    fn from(value: &[u8; N]) -> Self {
+        value.into_iter().map(|d| *d as Digit).collect()
+    }
+}
+
 impl<B: BigIntImplementation<256>> From<&[u8]> for BigInt<256, B> {
     fn from(value: &[u8]) -> Self {
         value.into_iter().map(|d| *d as Digit).collect()
