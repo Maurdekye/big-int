@@ -1,11 +1,24 @@
 use crate::prelude::*;
 use std::{collections::VecDeque, vec};
 
+/// A loosely-packed arbitrary base big int. 
+/// See `Loose<BASE>` for implementation details.
 pub type LooseInt<const BASE: usize> = BigInt<BASE, Loose<BASE>>;
 
-/// `Loose`: represents an arbitrary-size integer in base `BASE`.
-///
-/// `BASE` may be anywhere from 2-u64::MAX.
+/// A loosely-packed arbitrary base big int implementation. 
+/// Supports any base from 2-u64::MAX. 
+/// 
+/// Each digit requires 8 bytes of storage, making this a somewhat space-inefficient 
+/// implementation. however, the lack of additional complexity improves runtime efficiency on the
+/// tightly-packed implementation.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// 
+/// let a: LooseInt<10> = 593.into();
+/// let b = a * 96.into();
+/// assert_eq!(b, 56928.into());
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Loose<const BASE: usize> {
     sign: Sign,

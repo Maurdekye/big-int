@@ -1,22 +1,25 @@
-#![allow(incomplete_features)]
-#![feature(min_specialization)]
-#![feature(generic_const_exprs)]
 //! ## `big_int` - Arbitrary precision, arbitrary base integer arithmetic library.
 //!
 //! ```
 //! use big_int::{loose::*, BigInt, BigIntImplementation};
-//!
+//! 
 //! let mut a: LooseInt<10> = "9000000000000000000000000000000000000000".parse().unwrap();
-//!
 //! a /= 13.into();
 //! assert_eq!(a, "692307692307692307692307692307692307692".parse().unwrap());
-//!
+//! 
 //! let mut b: LooseInt<16> = a.convert();
 //! assert_eq!(b, "208D59C8D8669EDC306F76344EC4EC4EC".parse().unwrap());
-//!
 //! b >>= 16.into();
+//! 
 //! let c: LooseInt<2> = b.convert();
 //! assert_eq!(c, "100000100011010101100111001000110110000110011010011110110111000011".parse().unwrap());
+//! 
+//! let mut d: TightInt<256> = c.convert();
+//! d += vec![15, 90, 0].into();
+//! assert_eq!(d, vec![2, 8, 213, 156, 141, 134, 121, 71, 195].into());
+//! 
+//! let e: TightInt<10> = d.convert();
+//! assert_eq!(format!("{e}"), "37530075201422313411".to_string());
 //! ```
 
 use std::{
@@ -495,6 +498,12 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> FromIterator<Digit> f
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<Vec<Digit>> for BigInt<BASE, B> {
     fn from(value: Vec<Digit>) -> Self {
         value.into_iter().collect()
+    }
+}
+
+impl<B: BigIntImplementation<256>> From<&[u8]> for BigInt<256, B> {
+    fn from(value: &[u8]) -> Self {
+        value.into_iter().map(|d| *d as Digit).collect()
     }
 }
 

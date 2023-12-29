@@ -8,8 +8,25 @@ type Datum = u8;
 
 const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 
+/// A tightly-packed arbitrary base big int. 
+/// See `Tight<BASE>` for implementation details.
 pub type TightInt<const BASE: usize> = BigInt<BASE, Tight<BASE>>;
 
+/// A tightly-packed arbitrary base big int implementation. 
+/// Supports any base from 2-u64::MAX. 
+/// 
+/// In this implementation, bits are tightly packed against one another,
+/// requiring only `ceil(log_2(BASE))` bits per digit. Signficiantly more space-efficient for
+/// smaller bases compared to the loose implementation. However, the extra indirection contributes
+/// to some added overhead.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// 
+/// let a: TightInt<10> = 593.into();
+/// let b = a * 96.into();
+/// assert_eq!(b, 56928.into());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Tight<const BASE: usize> {
     sign: Sign,
@@ -167,8 +184,6 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
                     .into_iter()
                     .take(self.end_offset.div_ceil(DATUM_SIZE))
                     .collect();
-                eprintln!("self = {self:?}");
-                printbytes!(self.data);
             }
             self
         }
