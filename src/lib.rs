@@ -3,33 +3,33 @@
 //!
 //! ```
 //! use big_int::prelude::*;
-//! 
+//!
 //! let mut a: LooseInt<10> = "9000000000000000000000000000000000000000".parse().unwrap();
 //! a /= 13.into();
 //! assert_eq!(a, "692307692307692307692307692307692307692".parse().unwrap());
-//! 
+//!
 //! let mut b: LooseInt<16> = a.convert();
 //! assert_eq!(b, "208D59C8D8669EDC306F76344EC4EC4EC".parse().unwrap());
 //! b >>= 16.into();
-//! 
+//!
 //! let c: LooseInt<2> = b.convert();
 //! assert_eq!(c, "100000100011010101100111001000110110000110011010011110110111000011".parse().unwrap());
-//! 
+//!
 //! let mut d: TightInt<256> = c.convert();
 //! d += vec![15, 90, 0].into();
 //! assert_eq!(d, vec![2, 8, 213, 156, 141, 134, 121, 71, 195].into());
-//! 
+//!
 //! let e: TightInt<10> = d.convert();
 //! assert_eq!(format!("{e}"), "37530075201422313411".to_string());
 //! ```
-//! 
+//!
 //! This crate contains two primary big int implementations:
-//! * `LooseInt<BASE>` - A collection of loosely packed ints representing each digit. 
+//! * `LooseInt<BASE>` - A collection of loosely packed ints representing each digit.
 //!     Very memory inefficient, but with minimal performance overhead.
 //! * `TightInt<BASE>` - A collection of tightly packed bits representing each digit.
 //!     Maximally memory efficient; however, the additional indirection adds some performance overhead.
-//! 
-//! Ints support most basic arithmetic operations, including addition, subtraction, multiplication, 
+//!
+//! Ints support most basic arithmetic operations, including addition, subtraction, multiplication,
 //! division, and left/right shifting. Notably, shifting acts on the `BASE` of the associated number, increasing
 //! or decreasing the magnitude by powers of `BASE` as opposed to powers of 2.
 
@@ -50,10 +50,10 @@ use self::Sign::*;
 
 pub mod prelude {
     //! Default exports: includes `LooseInt`, `TightInt`, & `Sign`
-    pub use crate::*;
-    pub use crate::Sign::*;
     pub use crate::loose::*;
     pub use crate::tight::*;
+    pub use crate::Sign::*;
+    pub use crate::*;
 }
 
 mod get_back;
@@ -65,11 +65,13 @@ pub mod error;
 pub mod loose;
 pub mod tight;
 
+/// Standard alphabet used when translating between text and big ints.
 pub const STANDARD_ALPHABET: &str =
     "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz+/";
 
+/// Size of an individual big int digit.
 pub type Digit = u64;
-pub type DoubleDigit = u128;
+pub(crate) type DoubleDigit = u128;
 
 #[macro_export]
 macro_rules! mask {
@@ -119,9 +121,9 @@ where
     unsafe fn push_front(&mut self, digit: Digit);
 
     /// Divide the int by BASE^amount.
-    /// 
+    ///
     /// Note: works in powers of BASE, not in powers of 2.
-    /// 
+    ///
     /// Defined in terms of `shr_assign`; exactly one of `shr` or `shr_assign` must be defined.
     fn shr(mut self, amount: usize) -> Self {
         self.shr_assign(amount);
@@ -129,18 +131,18 @@ where
     }
 
     /// Divide the int by BASE^amount in place.
-    /// 
+    ///
     /// Note: works in powers of BASE, not in powers of 2.
-    /// 
+    ///
     /// Defined in terms of `shr`; exactly one of `shr` or `shr_assign` must be defined.
     fn shr_assign(&mut self, amount: usize) {
         *self = self.clone().shr(amount);
     }
 
     /// Multiply the int by BASE^amount.
-    /// 
+    ///
     /// Note: works in powers of BASE, not in powers of 2.
-    /// 
+    ///
     /// Defined in terms of `shl_assign`; exactly one of `shl` or `shl_assign` must be defined.
     fn shl(mut self, amount: usize) -> Self {
         self.shl_assign(amount);
@@ -148,9 +150,9 @@ where
     }
 
     /// Multiply the int by BASE^amount in place.
-    /// 
+    ///
     /// Note: works in powers of BASE, not in powers of 2.
-    /// 
+    ///
     /// Defined in terms of `shl`; exactly one of `shl` or `shl_assign` must be defined.
     fn shl_assign(&mut self, amount: usize) {
         *self = self.clone().shl(amount);
@@ -172,7 +174,7 @@ where
         self
     }
 
-    /// Normalize a `Loose` big int in place. Remove trailing zeros, and disable the parity flag
+    /// Normalize a big int in place. Remove trailing zeros, and disable the parity flag
     /// if the resulting number is zero.
     ///
     /// ```
@@ -214,7 +216,7 @@ where
         }
     }
 
-    /// Parse a `Loose` big int from a `value: &str`, referencing the provided `alphabet`
+    /// Parse a big int from a `value: &str`, referencing the provided `alphabet`
     /// to determine what characters represent which digits. `FromStr` uses this method
     /// with the default alphabet `STANDARD_ALPHABET`.
     ///
@@ -250,6 +252,8 @@ where
     }
 }
 
+/// A builder for a big int. Use this to construct a big int one digit at a time,
+/// then call .build() to finalize the builder.
 pub trait BigIntBuilder<const BASE: usize>
 where
     Self: std::fmt::Debug,
@@ -261,11 +265,11 @@ where
     fn with_sign(self, sign: Sign) -> Self;
 }
 
-pub trait Build<B> 
-{
+pub trait Build<B> {
     fn build(self) -> B;
 }
 
+/// Represents the sign of a big int; either Positive or Negative.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Sign {
     Positive,
@@ -277,8 +281,8 @@ impl Neg for Sign {
 
     fn neg(self) -> Self::Output {
         match self {
-            Self::Positive => Self::Negative,
-            Self::Negative => Self::Positive,
+            Positive => Negative,
+            Negative => Positive,
         }
     }
 }
@@ -288,28 +292,66 @@ impl Mul for Sign {
 
     fn mul(self, rhs: Self) -> Self::Output {
         if self == rhs {
-            Self::Positive
+            Positive
         } else {
-            Self::Negative
+            Negative
         }
     }
 }
 
 /// A big int.
-/// 
-/// Must be constructed with a specific implementation
+///
+/// Must be constructed from a specific implementation.
+///
+/// You should prefer to use the type aliases `LooseInt` / `TightInt` instead of
+/// using this type directly.
+///
+/// ```
+/// use big_int::prelude::*;
+///
+/// let a = BigInt::<10, Loose<10>>::from(unsafe { Loose::<10>::from_raw_parts(vec![9, 0, 1]) });
+/// assert_eq!(a, LooseInt::<10>::from(901));
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BigInt<const BASE: usize, B: BigIntImplementation<{ BASE }>>(B);
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
+    /// The value zero represented as a big int.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: TightInt<10> = 13.into();
+    /// let b = 13.into();
+    /// assert_eq!(a - b, BigInt::zero());
+    /// ```
     pub fn zero() -> Self {
         Self(B::zero())
     }
 
+    /// The big in with the given sign.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: TightInt<10> = 95.into();
+    /// assert_eq!(a.with_sign(Negative), (-95).into());
+    /// ```
     pub fn with_sign(self, sign: Sign) -> Self {
         Self(self.0.with_sign(sign))
     }
 
+    /// The big int shifted left by the `amount` provided.
+    ///
+    /// Note: shifts the int by powers of its `BASE`,
+    /// not by powers of 2.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: TightInt<10> = 45.into();
+    /// assert_eq!(a.shl(1), 450.into());
+    /// ```
     pub fn shl(self, amount: usize) -> Self {
         Self(self.0.shl(amount))
     }
@@ -424,10 +466,10 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     }
 
     /// Compare the absolute magnitude of two big ints, ignoring their sign.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: TightInt<10> = (-105).into();
     /// let b = 15.into();
     /// assert!(a.cmp_magnitude(&b).is_gt());
@@ -530,7 +572,9 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<&[Digit]> for Bi
     }
 }
 
-impl<const BASE: usize, const N: usize, B: BigIntImplementation<{ BASE }>> From<[Digit; N]> for BigInt<BASE, B> {
+impl<const BASE: usize, const N: usize, B: BigIntImplementation<{ BASE }>> From<[Digit; N]>
+    for BigInt<BASE, B>
+{
     fn from(value: [Digit; N]) -> Self {
         value.into_iter().collect()
     }
@@ -893,4 +937,3 @@ where
         Some(self.cmp(other))
     }
 }
-
