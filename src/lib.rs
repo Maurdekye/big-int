@@ -2,7 +2,7 @@
 //! `big_int` - Arbitrary precision, arbitrary base integer arithmetic library.
 //!
 //! ```
-//! use big_int::{loose::*, BigInt, BigIntImplementation};
+//! use big_int::prelude::*;
 //! 
 //! let mut a: LooseInt<10> = "9000000000000000000000000000000000000000".parse().unwrap();
 //! a /= 13.into();
@@ -24,7 +24,7 @@
 //! ```
 //! 
 //! This crate contains two primary big int implementations:
-//! * `looseInt<BASE>` - A collection of loosely packed ints representing each digit. 
+//! * `LooseInt<BASE>` - A collection of loosely packed ints representing each digit. 
 //!     Very memory ineffient, but with minimal performance overhead.
 //! * `TightInt<BASE>` - A collection of tightly packed bits representing each digit.
 //!     Maximally memory efficient; however, the additional indirection adds some performance overhead.
@@ -49,6 +49,7 @@ use get_back::GetBack;
 use self::Sign::*;
 
 pub mod prelude {
+    //! Default exports: includes `LooseInt`, `TightInt`, & `Sign`
     pub use crate::*;
     pub use crate::Sign::*;
     pub use crate::loose::*;
@@ -163,7 +164,7 @@ where
     /// ```
     /// use big_int::prelude::*;
     ///
-    /// let n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    /// let n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     /// assert_eq!(n.normalized(), 83.into());
     /// ```
     fn normalized(mut self) -> Self {
@@ -177,7 +178,7 @@ where
     /// ```
     /// use big_int::prelude::*;
     ///
-    /// let mut n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    /// let mut n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     /// n.normalize();
     /// assert_eq!(n, 83.into());
     /// ```
@@ -294,8 +295,11 @@ impl Mul for Sign {
     }
 }
 
+/// A big int.
+/// 
+/// Must be constructed with a specific implementation
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BigInt<const BASE: usize, B: BigIntImplementation<{ BASE }>>(pub B);
+pub struct BigInt<const BASE: usize, B: BigIntImplementation<{ BASE }>>(B);
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     pub fn zero() -> Self {

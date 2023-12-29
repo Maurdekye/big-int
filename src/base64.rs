@@ -1,8 +1,6 @@
-use crate::{
-    error::BigIntError,
-    loose::{Loose, LooseInt},
-    BigInt, BigIntImplementation, Digit,
-};
+//! base64 encoding & decoding, baked into the library :)
+
+use crate::{error::BigIntError, loose::LooseInt, BigInt, BigIntImplementation, Digit};
 
 pub const BASE64_ALPHABET: &str =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -24,7 +22,7 @@ pub fn encode(bytes: &[u8]) -> String {
         .collect::<Vec<_>>();
     let padding = 3 - ((digits.len() - 1) % 3) - 1;
     digits.extend(vec![0; padding]);
-    let data_as_int: LooseInt<256> = BigInt(unsafe { Loose::from_raw_parts(digits) });
+    let data_as_int: LooseInt<256> = digits.into();
     let base64_data: LooseInt<64> = data_as_int.convert();
     let base64_string = base64_data.display(BASE64_ALPHABET).unwrap();
     base64_string[4..base64_string.len() - padding].to_string()
@@ -49,9 +47,7 @@ pub fn decode(b64_string: impl Into<String>) -> Result<Vec<u8>, BigIntError> {
         BigInt::parse(&b64_string, BASE64_ALPHABET).map_err(BigIntError::ParseFailed)?;
     let bytes_int: LooseInt<256> = string_as_int.convert();
     let bytes = bytes_int
-        .0
-        .digits()
-        .into_iter()
+        .iter()
         .map(u8::try_from)
         .collect::<Result<Vec<_>, _>>()
         .unwrap();

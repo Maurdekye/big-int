@@ -1,3 +1,5 @@
+//! loosely packed big int implementation.
+
 use crate::prelude::*;
 use std::{collections::VecDeque, vec};
 
@@ -38,29 +40,13 @@ impl<const BASE: usize> Loose<BASE> {
     /// use big_int::prelude::*;
     ///
     /// assert_eq!(
-    ///     -BigInt(unsafe { Loose::<10>::from_raw_parts(vec![1, 5]) }),
+    ///     -BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![1, 5]) }),
     ///     (-15).into()
     /// );
     /// ```
     pub unsafe fn from_raw_parts(digits: Vec<Digit>) -> Self {
         let sign = Positive;
         Loose { sign, digits }
-    }
-
-    /// Extract the underlying digit Vec from the int.
-    ///
-    /// Can only be used to recreate the original int with the unsafe `from_raw_parts` fn.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// assert_eq!(
-    ///     LooseInt::<10>::from(539).0.digits(),
-    ///     vec![5, 3, 9]
-    /// );
-    /// ```
-    pub fn digits(self) -> Vec<Digit> {
-        self.digits
     }
 }
 
@@ -104,7 +90,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     /// ```
     /// use big_int::prelude::*;
     ///
-    /// let n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    /// let n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     /// assert_eq!(n.normalized(), 83.into());
     /// ```
     fn normalized(self) -> Self {

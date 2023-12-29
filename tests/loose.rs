@@ -13,7 +13,8 @@ fn parse() {
     assert_eq!("0".parse(), Ok(LooseInt::<10>::from(0)));
     assert_eq!(
             "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".parse(),
-        Ok(BigInt(unsafe { Loose::<10>::from_raw_parts(vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) })))
+        Ok(LooseInt::<10>::from(vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+    )
 }
 
 #[test]
@@ -42,52 +43,46 @@ fn parse_error() {
 
 #[test]
 fn from_primitive() {
-    assert_eq!(
-        LooseInt::<10>::from(524_u128),
-        BigInt(unsafe { Loose::from_raw_parts(vec![5, 2, 4]) })
-    );
+    assert_eq!(LooseInt::<10>::from(524_u128), vec![5, 2, 4].into());
     assert_eq!(
         LooseInt::<10>::from(-301_isize),
-        -BigInt(unsafe { Loose::from_raw_parts(vec![3, 0, 1]) })
+        -LooseInt::<10>::from(vec![3, 0, 1])
     );
-    assert_eq!(
-        LooseInt::<10>::from(255_u8),
-        BigInt(unsafe { Loose::from_raw_parts(vec![2, 5, 5]) })
-    );
+    assert_eq!(LooseInt::<10>::from(255_u8), vec![2, 5, 5].into());
 }
 
 #[test]
 fn normalized() {
     assert_eq!(
-        BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 0, 0]) }).normalized(),
+        BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 0, 0]) }).normalized(),
         0.into()
     );
     assert_eq!(
-        (-BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0]) })).normalized(),
+        (-BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0]) })).normalized(),
         0.into()
     );
     assert_eq!(
-        BigInt(unsafe { Loose::<10>::from_raw_parts(vec![]) }).normalized(),
+        BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![]) }).normalized(),
         0.into()
     );
     assert_eq!(
-        BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) }).normalized(),
+        BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) }).normalized(),
         83.into()
     );
 }
 
 #[test]
 fn normalize() {
-    let mut n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 0, 0]) });
+    let mut n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 0, 0]) });
     n.normalize();
     assert_eq!(n, 0.into());
-    let mut n = -BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0]) });
+    let mut n = -BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0]) });
     n.normalize();
     assert_eq!(n, 0.into());
-    let mut n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![]) });
+    let mut n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![]) });
     n.normalize();
     assert_eq!(n, 0.into());
-    let mut n = BigInt(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    let mut n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
     n.normalize();
     assert_eq!(n, 83.into());
 }
@@ -266,8 +261,8 @@ fn division_4() {
     assert_eq!(
         a.div_rem(b),
         Ok((
-            BigInt(unsafe { Loose::from_raw_parts(vec![1]) }),
-            BigInt(unsafe { Loose::from_raw_parts(vec![41, 193, 60, 79, 234, 66, 226, 56]) }),
+            BigInt::from(unsafe { Loose::from_raw_parts(vec![1]) }),
+            BigInt::from(unsafe { Loose::from_raw_parts(vec![41, 193, 60, 79, 234, 66, 226, 56]) }),
         ))
     );
 }

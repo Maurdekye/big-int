@@ -1,4 +1,4 @@
-//! ## `tight` - More compact BigInt, for better memory efficiency
+//! tightly packed big int implementation, for better memory efficiency
 
 use std::collections::VecDeque;
 
