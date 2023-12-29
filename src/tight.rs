@@ -8,7 +8,7 @@
 //! assert_eq!(a, 6500.into());
 //! 
 //! a.shr_assign(2);
-//! a += 17;
+//! a += 17.into();
 //! assert_eq!(a, 82.into());
 //! ```
 
