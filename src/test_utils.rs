@@ -1,6 +1,6 @@
 #[macro_export]
 macro_rules! test_pairs {
-    ($([$t:ident; $n:expr]),*) => {
+    ($([$t:ty; $n:literal]),*) => {
         {
             let mut rng = thread_rng();
             std::iter::empty()$(.chain((0..$n).map(|_| (
@@ -13,7 +13,7 @@ macro_rules! test_pairs {
 
 #[macro_export]
 macro_rules! test_values {
-    ($([$t:ident; $n:expr]),*) => {
+    ($([$t:ty; $n:literal]),*) => {
         {
             let mut rng = thread_rng();
             std::iter::empty()$(.chain((0..$n).map(|_| 
@@ -21,4 +21,11 @@ macro_rules! test_values {
             )))*
         }
     };
+}
+
+#[macro_export]
+macro_rules! printbytes {
+    ($d:expr) => {
+        println!("{}", $d.iter().map(|d| format!("{d:08b}")).collect::<Vec<_>>().join(" "));
+    }
 }

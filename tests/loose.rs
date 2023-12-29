@@ -1,5 +1,4 @@
 use big_int::{
-    base64::{decode, encode},
     error::{BigIntError, ParseError},
     prelude::*,
     test_pairs, test_values,
@@ -521,16 +520,4 @@ fn shr() {
     assert_eq!(LooseInt::<10>::from(9100) >> 2.into(), 91.into());
     assert_eq!(LooseInt::<2>::from(256) >> 4.into(), 16.into());
     assert_eq!(LooseInt::<16>::from(28672) >> 3.into(), 7.into());
-}
-
-#[test]
-fn base64_encode_test() {
-    let data = b"Hello world!";
-    assert_eq!(encode(data), "SGVsbG8gd29ybGQh");
-}
-
-#[test]
-fn base64_decode_test() {
-    let string = "SGVsbG8gd29ybGQh";
-    assert_eq!(decode(string).unwrap(), b"Hello world!");
 }

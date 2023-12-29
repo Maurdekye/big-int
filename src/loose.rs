@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use std::{collections::VecDeque, mem, vec};
+use std::{collections::VecDeque, vec};
 
 pub type LooseInt<const BASE: usize> = BigInt<BASE, Loose<BASE>>;
 
@@ -119,7 +119,7 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
         self.digits.push(digit);
     }
 
-    fn push_front(&mut self, digit: crate::Digit) {
+    unsafe fn push_front(&mut self, digit: crate::Digit) {
         self.digits.insert(0, digit);
     }
 
@@ -204,10 +204,16 @@ impl<const BASE: usize> BigIntBuilder<BASE> for LooseBuilder<BASE> {
     }
 }
 
+impl<const BASE: usize> Build<Loose<BASE>> for LooseBuilder<BASE> {
+    fn build(self) -> Loose<BASE> {
+        Loose::<BASE>::from(self).normalized()
+    }
+}
+
 impl<const BASE: usize> From<LooseBuilder<BASE>> for Loose<BASE> {
     fn from(value: LooseBuilder<BASE>) -> Self {
         let sign = value.sign;
         let digits = value.digits.into();
-        Loose { sign, digits }.normalized()
+        Loose { sign, digits }
     }
 }

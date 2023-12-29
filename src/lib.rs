@@ -56,11 +56,18 @@ pub const STANDARD_ALPHABET: &str =
 pub type Digit = u64;
 pub type DoubleDigit = u128;
 
+#[macro_export]
+macro_rules! mask {
+    ($n:expr) => {
+        (((1 << (($n) - 1)) - 1) << 1) + 1
+    };
+}
+
 pub trait BigIntImplementation<const BASE: usize>
 where
-    Self: From<Self::Builder> + Clone + PartialEq + Eq + std::fmt::Debug,
+    Self: Clone + PartialEq + Eq + std::fmt::Debug,
 {
-    type Builder: BigIntBuilder<{ BASE }>;
+    type Builder: BigIntBuilder<{ BASE }> + Build<Self>;
     type DigitIterator<'a>: DoubleEndedIterator<Item = Digit>
     where
         Self: 'a;
@@ -89,23 +96,47 @@ where
     /// Set the sign of the big int to `sign`.
     fn set_sign(&mut self, sign: Sign);
 
+    /// Append a digit to the right side of the int. Equivalent to `(int << 1) + digit`
     fn push_back(&mut self, digit: Digit);
-    fn push_front(&mut self, digit: Digit);
 
+    /// Append a digit to the left side of the int. Will denormalize if the appended digit is
+    /// a zero; make sure to call .normalize() afterwards to prevent undefined functionality.
+    unsafe fn push_front(&mut self, digit: Digit);
+
+    /// Divide the int by BASE^amount.
+    /// 
+    /// Note: works in powers of BASE, not in powers of 2.
+    /// 
+    /// Defined in terms of `shr_assign`; exactly one of `shr` or `shr_assign` must be defined.
     fn shr(mut self, amount: usize) -> Self {
         self.shr_assign(amount);
         self
     }
 
+    /// Divide the int by BASE^amount in place.
+    /// 
+    /// Note: works in powers of BASE, not in powers of 2.
+    /// 
+    /// Defined in terms of `shr`; exactly one of `shr` or `shr_assign` must be defined.
     fn shr_assign(&mut self, amount: usize) {
         *self = self.clone().shr(amount);
     }
 
+    /// Multiply the int by BASE^amount.
+    /// 
+    /// Note: works in powers of BASE, not in powers of 2.
+    /// 
+    /// Defined in terms of `shl_assign`; exactly one of `shl` or `shl_assign` must be defined.
     fn shl(mut self, amount: usize) -> Self {
         self.shl_assign(amount);
         self
     }
 
+    /// Multiply the int by BASE^amount in place.
+    /// 
+    /// Note: works in powers of BASE, not in powers of 2.
+    /// 
+    /// Defined in terms of `shl`; exactly one of `shl` or `shl_assign` must be defined.
     fn shl_assign(&mut self, amount: usize) {
         *self = self.clone().shl(amount);
     }
@@ -199,7 +230,7 @@ where
         if builder.is_empty() {
             Err(ParseError::NotEnoughCharacters)
         } else {
-            Ok(builder.with_sign(sign).into())
+            Ok(builder.with_sign(sign).build())
         }
     }
 }
@@ -213,6 +244,11 @@ where
     fn push_back(&mut self, digit: Digit);
     fn is_empty(&self) -> bool;
     fn with_sign(self, sign: Sign) -> Self;
+}
+
+pub trait Build<B> 
+{
+    fn build(self) -> B;
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -336,7 +372,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
             rem.set_sign(sign);
         }
 
-        Ok((quot.with_sign(sign).into(), rem))
+        Ok((quot.with_sign(sign).build().into(), rem))
     }
 
     /// Convert an int from its own base to another target base.
@@ -366,7 +402,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
             }
             result.push_front(Digit::from(self));
         }
-        BigInt(result.with_sign(sign).into())
+        result.with_sign(sign).build().into()
     }
 
     /// Compare the absolute magnitude of two big ints, ignoring their sign.
@@ -400,13 +436,9 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> DerefMut for BigInt<B
     }
 }
 
-impl<const BASE: usize, BB, B> From<BB> for BigInt<BASE, B>
-where
-    BB: BigIntBuilder<{ BASE }>,
-    B: BigIntImplementation<{ BASE }> + From<BB>,
-{
-    fn from(value: BB) -> Self {
-        Self(value.into())
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<B> for BigInt<BASE, B> {
+    fn from(value: B) -> Self {
+        BigInt(value)
     }
 }
 
@@ -450,6 +482,22 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> FromStr for BigInt<BA
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> FromIterator<Digit> for BigInt<BASE, B> {
+    fn from_iter<T: IntoIterator<Item = Digit>>(iter: T) -> Self {
+        let mut builder = B::Builder::new();
+        for digit in iter {
+            builder.push_back(digit);
+        }
+        builder.build().into()
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<Vec<Digit>> for BigInt<BASE, B> {
+    fn from(value: Vec<Digit>) -> Self {
+        value.into_iter().collect()
+    }
+}
+
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<u128> for BigInt<BASE, B> {
     fn from(mut value: u128) -> Self {
         let base = BASE as u128;
@@ -460,7 +508,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<u128> for BigInt
             result.push_front(rem as Digit);
         }
         result.push_front(value as Digit);
-        BigInt(result.into())
+        BigInt(result.build().into())
     }
 }
 
@@ -572,7 +620,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Add for BigInt<BASE, 
                     }
                 }
             }
-            result.with_sign(sign).into()
+            result.with_sign(sign).build().into()
         }
     }
 }
@@ -600,7 +648,9 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> AddAssign for BigInt<
                         if i <= self_len {
                             self.set_digit(self_len - i, sum as Digit);
                         } else {
-                            self.push_front(sum as Digit);
+                            unsafe {
+                                self.push_front(sum as Digit);
+                            }
                         }
                     }
                 }
@@ -646,7 +696,7 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Sub for BigInt<BASE, 
                     }
                 }
             }
-            result.with_sign(sign).into()
+            result.with_sign(sign).build().into()
         }
     }
 }
@@ -685,7 +735,9 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> SubAssign for BigInt<
                         if i <= self_len {
                             self.set_digit(self_len - i, difference);
                         } else {
-                            self.push_front(difference);
+                            unsafe {
+                                self.push_front(difference);
+                            }
                         }
                     }
                 }
@@ -791,3 +843,4 @@ where
         Some(self.cmp(other))
     }
 }
+

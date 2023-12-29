@@ -58,7 +58,7 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
                 digit_offset += bits_to_take;
                 bits_left_to_pull -= bits_to_take;
                 let datum_offset = bits_available_in_datum - bits_to_take;
-                let datum_mask = ((1 << bits_to_take) - 1) << datum_offset;
+                let datum_mask: Datum = mask!(bits_to_take) << datum_offset;
                 let piece_of_digit = ((self.data[datum_index] & datum_mask) as Digit
                     >> datum_offset)
                     << bits_left_to_pull;
@@ -80,9 +80,9 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
                 digit_offset += bits_to_set;
                 bits_left_to_set -= bits_to_set;
                 let datum_offset = bits_left_in_datum - bits_to_set;
-                let piece_mask = ((1 << bits_to_set) - 1) << bits_left_to_set;
+                let piece_mask = mask!(bits_to_set) << bits_left_to_set;
                 let piece_of_digit = ((value & piece_mask) >> bits_left_to_set) << datum_offset;
-                let datum_mask = ((1 << bits_to_set) - 1) << datum_offset;
+                let datum_mask = mask!(bits_to_set) << datum_offset;
                 self.data[datum_index] &= !datum_mask;
                 self.data[datum_index] |= piece_of_digit as Datum;
             }
@@ -116,10 +116,10 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
         *self = builder.into();
     }
 
-    fn push_front(&mut self, digit: Digit) {
+    unsafe fn push_front(&mut self, digit: Digit) {
         let mut builder = self.replace_with_builder();
         builder.push_front(digit);
-        *self = builder.into();
+        *self = builder.aligned().into();
     }
 
     fn shr_assign(&mut self, amount: usize) {
@@ -133,7 +133,7 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
 
     fn shl_assign(&mut self, amount: usize) {
         self.end_offset += Self::BITS_PER_DIGIT * amount;
-        let new_len = self.end_offset.div_ceil(Self::BITS_PER_DIGIT);
+        let new_len = self.end_offset.div_ceil(DATUM_SIZE);
         let cur_len = self.data.len();
         self.data.extend(vec![0; new_len - cur_len]);
     }
@@ -155,12 +155,20 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
         } else if self.start_offset > 0 {
             TightBuilder::<BASE>::from(self).aligned().into()
         } else {
-            if self.data.len() * Self::BITS_PER_DIGIT - self.end_offset >= DATUM_SIZE {
+            if self
+                .data
+                .len()
+                .checked_sub(self.end_offset.div_ceil(DATUM_SIZE))
+                .unwrap_or_default()
+                > 0
+            {
                 self.data = self
                     .data
                     .into_iter()
                     .take(self.end_offset.div_ceil(DATUM_SIZE))
                     .collect();
+                eprintln!("self = {self:?}");
+                printbytes!(self.data);
             }
             self
         }
@@ -230,8 +238,8 @@ impl<const BASE: usize> TightBuilder<BASE> {
             let data_length = (self.end_offset - self.start_offset).div_ceil(DATUM_SIZE);
             let mut data = VecDeque::new();
             let left_half_offset = DATUM_SIZE - self.start_offset;
-            let left_half_mask = ((1 << self.start_offset) - 1) << left_half_offset;
-            let right_half_mask = (1 << (DATUM_SIZE - self.start_offset)) - 1;
+            let left_half_mask = mask!(self.start_offset) << left_half_offset;
+            let right_half_mask = mask!(DATUM_SIZE - self.start_offset);
             let mut right_half = None;
             for datum in data_cells {
                 if let Some(right_half) = right_half {
@@ -250,6 +258,7 @@ impl<const BASE: usize> TightBuilder<BASE> {
                 }
             }
             self.end_offset -= self.start_offset;
+            self.start_offset = 0;
             data
         };
         self
@@ -279,7 +288,7 @@ impl<const BASE: usize> BigIntBuilder<{ BASE }> for TightBuilder<BASE> {
             let bits_to_take = space_left_in_datum.min(bits_left_to_set);
             self.start_offset -= bits_to_take;
             let mask_offset = Self::BITS_PER_DIGIT - bits_left_to_set;
-            let digit_mask = ((1 << bits_to_take) - 1) << mask_offset;
+            let digit_mask = mask!(bits_to_take) << mask_offset;
             bits_left_to_set -= bits_to_take;
             let piece_of_digit =
                 ((digit_mask & digit) >> mask_offset) << (DATUM_SIZE - space_left_in_datum);
@@ -299,7 +308,7 @@ impl<const BASE: usize> BigIntBuilder<{ BASE }> for TightBuilder<BASE> {
             let bits_to_take = space_left_in_datum.min(bits_left_to_set);
             self.end_offset += bits_to_take;
             bits_left_to_set -= bits_to_take;
-            let digit_mask = ((1 << bits_to_take) - 1) << bits_left_to_set;
+            let digit_mask = mask!(bits_to_take) << bits_left_to_set;
             let piece_of_digit = (((digit_mask & digit) >> bits_left_to_set)
                 << (DATUM_SIZE - bits_to_take))
                 >> bit_in_datum;
@@ -316,18 +325,19 @@ impl<const BASE: usize> BigIntBuilder<{ BASE }> for TightBuilder<BASE> {
     }
 }
 
-impl<const BASE: usize> From<TightBuilder<{ BASE }>> for Tight<BASE> {
-    fn from(value: TightBuilder<{ BASE }>) -> Self {
-        if value.is_empty() {
-            Self::zero()
-        } else {
-            let aligned = value.aligned();
-            Self {
-                sign: aligned.sign,
-                data: aligned.data,
-                start_offset: aligned.start_offset,
-                end_offset: aligned.end_offset,
-            }
+impl<const BASE: usize> Build<Tight<BASE>> for TightBuilder<BASE> {
+    fn build(self) -> Tight<BASE> {
+        Tight::<BASE>::from(self.aligned()).normalized()
+    }
+}
+
+impl<const BASE: usize> From<TightBuilder<BASE>> for Tight<BASE> {
+    fn from(builder: TightBuilder<BASE>) -> Self {
+        Self {
+            sign: builder.sign,
+            data: builder.data,
+            start_offset: builder.start_offset,
+            end_offset: builder.end_offset,
         }
     }
 }
@@ -344,6 +354,7 @@ const fn bits_per_digit(base: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -449,7 +460,7 @@ mod tests {
         let mut builder = TightBuilder::<8192>::new();
         builder.push_front(0b1111111111111);
         builder.push_front(0b1010101010101);
-        let number: Tight<8192> = builder.into();
+        let number: Tight<8192> = builder.build().into();
         assert_eq!(
             number.data,
             vec![0b10101010, 0b10101111, 0b11111111, 0b11000000]
@@ -459,8 +470,25 @@ mod tests {
     #[test]
     fn build_2() {
         let builder = TightBuilder::<10>::new();
-        let number: Tight<10> = builder.into();
+        let number: Tight<10> = builder.build().into();
         assert_eq!(number.data, vec![0]);
+    }
+
+    #[test]
+    fn build_3() {
+        let mut builder = TightBuilder::<10>::new();
+        builder.push_back(1);
+        builder.push_back(2);
+        builder.push_back(5);
+        assert_eq!(
+            Tight::<10>::from(builder),
+            Tight::<10> {
+                sign: Positive,
+                data: VecDeque::from(vec![18, 80]),
+                start_offset: 0,
+                end_offset: 12,
+            }
+        );
     }
 
     #[test]
