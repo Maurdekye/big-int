@@ -1,4 +1,5 @@
-//! ## `big_int` - Arbitrary precision, arbitrary base integer arithmetic library.
+#![feature(min_specialization)]
+//! `big_int` - Arbitrary precision, arbitrary base integer arithmetic library.
 //!
 //! ```
 //! use big_int::{loose::*, BigInt, BigIntImplementation};
@@ -21,6 +22,16 @@
 //! let e: TightInt<10> = d.convert();
 //! assert_eq!(format!("{e}"), "37530075201422313411".to_string());
 //! ```
+//! 
+//! This crate contains two primary big int implementations:
+//! * `looseInt<BASE>` - A collection of loosely packed ints representing each digit. 
+//!     Very memory ineffient, but with minimal performance overhead.
+//! * `TightInt<BASE>` - A collection of tightly packed bits representing each digit.
+//!     Maximally memory efficient; however, the additional indirection adds some performance overhead.
+//! 
+//! Ints support most basic arithmetic operations, including addition, subtraction, multiplication, 
+//! division, and left/right shifting. Notably, shifting acts on the `BASE` of the associated number, increasing
+//! or decreasing the magnitude by powers of `BASE` as opposed to powers of 2.
 
 use std::{
     cmp::Ordering,
@@ -409,6 +420,14 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     }
 
     /// Compare the absolute magnitude of two big ints, ignoring their sign.
+    /// 
+    /// ```
+    /// use big_int::prelude::*;
+    /// 
+    /// let a: TightInt<10> = (-105).into();
+    /// let b = 15.into();
+    /// assert!(a.cmp_magnitude(&b).is_gt());
+    /// ```
     pub fn cmp_magnitude(&self, rhs: &Self) -> Ordering {
         match self.len().cmp(&rhs.len()) {
             Ordering::Equal => {
