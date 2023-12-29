@@ -2,7 +2,7 @@
 
 Simple library for arbitrary-precision, arbitrary-base arithmetic, supporting arbitrarily large integers of any base from 2 to `usize::MAX`.
 
-```
+```rs
 use big_int::prelude::*;
 
 let mut a: LooseInt<10> = "9000000000000000000000000000000000000000".parse().unwrap();
@@ -26,7 +26,7 @@ assert_eq!(format!("{e}"), "37530075201422313411".to_string());
 
 This crate contains two primary big int implementations:
 * `LooseInt<BASE>` - A collection of loosely packed ints representing each digit. 
-    Very memory ineffient, but with minimal performance overhead.
+    Very memory inefficient, but with minimal performance overhead.
 * `TightInt<BASE>` - A collection of tightly packed bits representing each digit.
     Maximally memory efficient; however, the additional indirection adds some performance overhead.
 

@@ -25,7 +25,7 @@
 //! 
 //! This crate contains two primary big int implementations:
 //! * `LooseInt<BASE>` - A collection of loosely packed ints representing each digit. 
-//!     Very memory ineffient, but with minimal performance overhead.
+//!     Very memory inefficient, but with minimal performance overhead.
 //! * `TightInt<BASE>` - A collection of tightly packed bits representing each digit.
 //!     Maximally memory efficient; however, the additional indirection adds some performance overhead.
 //! 
