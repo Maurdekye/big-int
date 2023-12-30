@@ -102,9 +102,9 @@ macro_rules! mask {
 /// ```
 pub trait BigIntImplementation<const BASE: usize>
 where
-    Self: Clone + PartialEq + Eq + std::fmt::Debug,
+    Self: Clone + PartialEq + Eq + std::fmt::Debug + Normalize,
 {
-    type Builder: BigIntBuilder<{ BASE }> + Build<Self>;
+    type Builder: BigIntBuilder<{ BASE }> + Build<Self> + Into<Denormal<Self>>;
     type DigitIterator<'a>: DoubleEndedIterator<Item = Digit>
     where
         Self: 'a;
@@ -298,48 +298,6 @@ where
     /// ```
     fn iter<'a>(&'a self) -> Self::DigitIterator<'a>;
 
-    /// Return a normalized version of the int. A normalized int:
-    /// * has no trailing zeros
-    /// * has at least one digit
-    /// * is not negative zero
-    /// Additionally, `TightInt`s will be aligned to the beginning of their data segment
-    /// when normalized.
-    ///
-    /// Defined in terms of `normalize`; at least one of `normalize` or `normalized`
-    /// must be defined.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
-    /// assert_eq!(n.normalized(), 83.into());
-    /// ```
-    fn normalized(mut self) -> Self {
-        self.normalize();
-        self
-    }
-
-    /// Normalize a big int in place.
-    /// * has no trailing zeros
-    /// * has at least one digit
-    /// * is not negative zero
-    /// Additionally, `TightInt`s will be aligned to the beginning of their data segment
-    /// when normalized.
-    ///
-    /// Defined in terms of `normalized`; at least one of `normalize` or `normalized`
-    /// must be defined.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let mut n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
-    /// n.normalize();
-    /// assert_eq!(n, 83.into());
-    /// ```
-    fn normalize(&mut self) {
-        *self = self.clone().normalized();
-    }
-
     /// Convert a big int to a printable string using the provided alphabet `alphabet`.
     /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
     ///
@@ -401,17 +359,6 @@ where
         } else {
             Ok(builder.with_sign(sign).build())
         }
-    }
-}
-
-impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Normalize for B {
-    fn normalized(mut self) -> Self {
-        self.normalize();
-        self
-    }
-
-    fn normalize(&mut self) {
-        *self = self.clone().normalized();
     }
 }
 
@@ -568,39 +515,125 @@ impl Mul for Sign {
 }
 
 pub trait Normalize: Clone {
-
     fn normalized(mut self) -> Self {
         self.normalize();
         self
     }
-    
+
     fn normalize(&mut self) {
         *self = self.clone().normalized();
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Denormal<N: Normalize>(N);
 
 impl<N: Normalize> Denormal<N> {
     pub fn unwrap(self) -> N {
         self.0.normalized()
     }
-}
 
-impl<N: Normalize> Deref for Denormal<N> {
-    type Target = N;
+    pub fn map<V: Normalize>(self, f: impl FnOnce(N) -> V) -> Denormal<V> {
+        Denormal(f(self.0))
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+    pub fn and_then<V: Normalize>(self, f: impl FnOnce(N) -> Denormal<V>) -> Denormal<V> {
+        f(self.0)
     }
 }
 
-impl<N: Normalize> DerefMut for Denormal<N> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Denormal<BigInt<BASE, B>> {
+    // BigIntImplementation methods
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn get_digit(&self, digit: usize) -> Option<Digit> {
+        self.0.get_digit(digit)
+    }
+    pub fn set_digit(&mut self, digit: usize, value: Digit) {
+        self.0.set_digit(digit, value)
+    }
+    pub fn sign(&self) -> Sign {
+        self.0.sign()
+    }
+    pub fn set_sign(&mut self, sign: Sign) {
+        self.0.set_sign(sign);
+    }
+    pub fn push_back(&mut self, digit: Digit) {
+        self.0.push_back(digit);
+    }
+    pub fn push_front(&mut self, digit: Digit) {
+        self.0.push_front(digit);
+    }
+    pub fn iter<'a>(&'a self) -> B::DigitIterator<'a> {
+        self.0.iter()
+    }
+    pub fn display(&self, alphabet: &str) -> Result<String, BigIntError> {
+        self.0.display(alphabet)
+    }
+    pub fn parse(value: &str, alphabet: &str) -> Result<Self, ParseError> {
+        BigInt::<BASE, B>::parse(value, alphabet).map(Denormal)
+    }
+
+    // BigInt methods
+
+    pub fn zero() -> Self {
+        Denormal(BigInt::<BASE, B>::zero())
+    }
+    pub fn is_zero(&self) -> bool {
+        self.0.is_zero()
+    }
+    pub fn add_assign_denormal(&mut self, rhs: Self) {
+        self.0.add_assign_denormal(rhs);
+    }
+    pub fn add_denormal(self, rhs: Self) -> Self {
+        self.0.add_denormal(rhs)
+    }
+    pub fn sub_assign_denormal(&mut self, rhs: Self) {
+        self.0.sub_assign_denormal(rhs);
+    }
+    pub fn sub_denormal(self, rhs: Self) -> Self {
+        self.0.sub_denormal(rhs)
+    }
+    pub fn mul_denormal(self, rhs: Self) -> Self {
+        self.0.mul_denormal(rhs)
+    }
+    pub fn div_rem_denormal(self, rhs: Self) -> Result<(Self, Self), BigIntError> {
+        self.0.div_rem_denormal(rhs)
+    }
+    pub fn with_sign(self, sign: Sign) -> Self {
+        Denormal(self.0.with_sign(sign))
+    }
+    pub fn shl(self, amount: usize) -> Self {
+        Denormal(self.0.shl(amount))
+    }
+    pub fn shl_assign(&mut self, amount: usize) {
+        self.0.shl_assign(amount);
+    }
+    pub fn shr(self, amount: usize) -> Self {
+        Denormal(self.0.shr(amount))
+    }
+    pub fn shr_assign(&mut self, amount: usize) {
+        self.0.shr_assign(amount);
+    }
+    pub fn convert_denormal<const TO: usize, T: BigIntImplementation<{ TO }>>(
+        self,
+    ) -> Denormal<BigInt<TO, T>> {
+        self.0.convert_denormal()
+    }
+    pub fn cmp_magnitude(&self, rhs: &Self) -> Ordering {
+        self.0.cmp_magnitude(&rhs.0)
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> GetBack for Denormal<BigInt<BASE, B>> {
+    type Item = Digit;
+
+    fn get_back(&self, index: usize) -> Option<Self::Item> {
+        self.0.get_back(index)
+    }
+}
 
 /// A big int.
 ///
@@ -630,6 +663,165 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     /// ```
     pub fn zero() -> Self {
         Self(B::zero())
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.iter().all(|digit| digit == 0)
+    }
+
+    pub fn add_assign_denormal(&mut self, rhs: Denormal<Self>) {
+        if self.sign() != rhs.sign() {
+            self.sub_assign_denormal(-rhs);
+        } else {
+            let self_len = self.len();
+            let mut carry = 0;
+            for i in 1.. {
+                match (self.get_back(i), rhs.get_back(i), carry) {
+                    (None, None, 0) => break,
+                    (left_digit, right_digit, carry_in) => {
+                        let left_digit = left_digit.unwrap_or_default() as DoubleDigit;
+                        let right_digit = right_digit.unwrap_or_default() as DoubleDigit;
+                        let mut sum = left_digit + right_digit + carry_in;
+                        if sum >= BASE as DoubleDigit {
+                            sum -= BASE as DoubleDigit;
+                            carry = 1;
+                        } else {
+                            carry = 0;
+                        }
+                        if i <= self_len {
+                            self.set_digit(self_len - i, sum as Digit);
+                        } else {
+                            self.push_front(sum as Digit);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn add_denormal(self, rhs: Denormal<Self>) -> Denormal<Self> {
+        if self.sign() != rhs.sign() {
+            self.sub_denormal(-rhs)
+        } else {
+            let sign = self.sign();
+            let mut carry = 0;
+            let mut result = B::Builder::new();
+            for i in 1.. {
+                match (self.get_back(i), rhs.get_back(i), carry) {
+                    (None, None, 0) => break,
+                    (left_digit, right_digit, carry_in) => {
+                        let left_digit = left_digit.unwrap_or_default() as DoubleDigit;
+                        let right_digit = right_digit.unwrap_or_default() as DoubleDigit;
+                        let mut sum = left_digit + right_digit + carry_in;
+                        if sum >= BASE as DoubleDigit {
+                            sum -= BASE as DoubleDigit;
+                            carry = 1;
+                        } else {
+                            carry = 0;
+                        }
+                        result.push_front(sum as Digit);
+                    }
+                }
+            }
+            result.with_sign(sign).into().into()
+        }
+    }
+
+    pub fn sub_assign_denormal(&mut self, mut rhs: Denormal<Self>) {
+        if self.sign() != rhs.sign() {
+            self.add_assign_denormal(-rhs);
+        } else if rhs.0.cmp_magnitude(self).is_gt() {
+            rhs.sub_assign_denormal(Denormal(self.clone()));
+            *self = -rhs.0;
+        } else {
+            let self_len = self.len();
+            for i in 1.. {
+                match (self.get_back(i), rhs.get_back(i)) {
+                    (None, None) => break,
+                    (left_digit, right_digit) => {
+                        let mut left_digit = left_digit.unwrap_or_default() as DoubleDigit;
+                        let right_digit = right_digit.unwrap_or_default() as DoubleDigit;
+                        if left_digit < right_digit {
+                            for j in i + 1.. {
+                                match self.get_back(j) {
+                                    None => unreachable!("big int subtraction with overflow"),
+                                    Some(0) => {
+                                        self.set_digit(self_len - j, (BASE - 1) as Digit);
+                                    }
+                                    Some(digit) => {
+                                        self.set_digit(self_len - j, digit - 1);
+                                        break;
+                                    }
+                                }
+                            }
+                            left_digit += BASE as DoubleDigit;
+                        }
+                        let difference = (left_digit - right_digit) as Digit;
+                        if i <= self_len {
+                            self.set_digit(self_len - i, difference);
+                        } else {
+                            self.push_front(difference);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn sub_denormal(mut self, rhs: Denormal<Self>) -> Denormal<Self> {
+        if self.sign() != rhs.sign() {
+            self.add_denormal(-rhs)
+        } else if rhs.0.cmp_magnitude(&self).is_gt() {
+            -rhs.and_then(|rhs| rhs.sub_denormal(Denormal(self)))
+        } else {
+            let sign = self.sign();
+            let mut result = B::Builder::new();
+            let self_len = self.len();
+            for i in 1.. {
+                match (self.get_back(i), rhs.get_back(i)) {
+                    (None, None) => break,
+                    (left_digit, right_digit) => {
+                        let mut left_digit = left_digit.unwrap_or_default() as DoubleDigit;
+                        let right_digit = right_digit.unwrap_or_default() as DoubleDigit;
+                        if left_digit < right_digit {
+                            for j in i + 1.. {
+                                match self.get_back(j) {
+                                    None => unreachable!("big int subtraction with overflow"),
+                                    Some(0) => {
+                                        self.set_digit(self_len - j, (BASE - 1) as Digit);
+                                    }
+                                    Some(digit) => {
+                                        self.set_digit(self_len - j, digit - 1);
+                                        break;
+                                    }
+                                }
+                            }
+                            left_digit += BASE as DoubleDigit;
+                        }
+                        result.push_front((left_digit - right_digit) as Digit);
+                    }
+                }
+            }
+            result.with_sign(sign).into().into()
+        }
+    }
+
+    pub fn mul_denormal(mut self, mut rhs: Denormal<Self>) -> Denormal<Self> {
+        let sign = self.sign() * rhs.sign();
+        self.set_sign(Positive);
+        rhs.set_sign(Positive);
+        let mut result = Self::zero();
+        for i in 1.. {
+            if let Some(digit) = self.get_back(i) {
+                for _ in 0..digit {
+                    result.add_assign_denormal(rhs.clone());
+                }
+                rhs.shl_assign(1);
+            } else {
+                break;
+            }
+        }
+        Denormal(result.with_sign(sign))
     }
 
     /// The big in with the given sign.
@@ -729,33 +921,37 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     /// let b = 56_789.into();
     /// assert_eq!(a.div_rem(b), Ok((17_609.into(), 2_498.into())));
     /// ```
-    pub fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
-        if other.clone().normalized() == Self::zero() {
+    pub fn div_rem_denormal(
+        self,
+        mut rhs: Denormal<Self>,
+    ) -> Result<(Denormal<Self>, Denormal<Self>), BigIntError> {
+        let mut this = Denormal(self);
+        if rhs.is_zero() {
             return Err(BigIntError::DivisionByZero);
         }
-        if other.len() > self.len() {
-            return Ok((Self::zero(), self));
+        if this.cmp_magnitude(&rhs).is_lt() {
+            return Ok((Denormal(Self::zero()), this));
         }
-        let sign = self.sign() * other.sign();
-        self.set_sign(Positive);
-        other.set_sign(Positive);
-        let quot_digits = self.len() - other.len() + 1;
+        let sign = this.sign() * rhs.sign();
+        this.set_sign(Positive);
+        rhs.set_sign(Positive);
+        let quot_digits = this.len() - rhs.len() + 1;
         let mut quot = B::Builder::new();
-        let mut prod = Self::zero();
-        let mut addend = other.clone().shl(quot_digits - 1);
+        let mut prod = Denormal::<Self>::zero();
+        let mut addend: Denormal<BigInt<BASE, B>> = rhs.clone().shl(quot_digits - 1);
         let mut addends = Vec::new();
         let mut power = 1;
         while power < BASE {
             addends.push(addend.clone());
-            addend += addend.clone();
+            addend.add_assign_denormal(addend.clone());
             power <<= 1;
         }
 
         for _ in 0..quot_digits {
             let mut digit_value = 0;
             for power in (0..addends.len()).rev() {
-                let new_prod = prod.clone() + addends[power].clone();
-                if new_prod <= self {
+                let new_prod = prod.clone().add_denormal(addends[power].clone());
+                if new_prod <= this {
                     digit_value += 1 << power;
                     prod = new_prod;
                 }
@@ -764,12 +960,17 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
             quot.push_back(digit_value);
         }
 
-        let mut rem = self - prod;
-        if rem != Self::zero() {
+        let mut rem = this.sub_denormal(prod);
+        if !rem.is_zero() {
             rem.set_sign(sign);
         }
 
-        Ok((quot.with_sign(sign).build().into(), rem))
+        Ok((quot.with_sign(sign).into().into(), rem))
+    }
+
+    pub fn div_rem(self, rhs: Self) -> Result<(Self, Self), BigIntError> {
+        self.div_rem_denormal(Denormal(rhs))
+            .map(|(quot, rem)| (quot.unwrap(), rem.unwrap()))
     }
 
     /// Convert an int from its own base to another target base.
@@ -782,7 +983,9 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     ///     LooseInt::<16>::from(99825)
     /// );
     /// ```
-    pub fn convert<const TO: usize, T: BigIntImplementation<{ TO }>>(mut self) -> BigInt<TO, T> {
+    pub fn convert_denormal<const TO: usize, T: BigIntImplementation<{ TO }>>(
+        mut self,
+    ) -> Denormal<BigInt<TO, T>> {
         let sign = self.sign();
         let mut result = T::Builder::new();
         if BASE == TO {
@@ -799,7 +1002,11 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
             }
             result.push_front(Digit::from(self));
         }
-        result.with_sign(sign).build().into()
+        result.with_sign(sign).into().into()
+    }
+
+    pub fn convert<const TO: usize, T: BigIntImplementation<{ TO }>>(self) -> BigInt<TO, T> {
+        self.convert_denormal().unwrap()
     }
 
     /// Compare the absolute magnitude of two big ints, ignoring their sign.
@@ -812,10 +1019,10 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> BigInt<BASE, B> {
     /// assert!(a.cmp_magnitude(&b).is_gt());
     /// ```
     pub fn cmp_magnitude(&self, rhs: &Self) -> Ordering {
-        for i in (1..self.len().max(rhs.len())).rev() {
+        for i in (1..=self.len().max(rhs.len())).rev() {
             match (self.get_back(i), rhs.get_back(i)) {
-                (Some(1..=9), None) => return Ordering::Greater,
-                (None, Some(1..=9)) => return Ordering::Less,
+                (Some(1..), None) => return Ordering::Greater,
+                (None, Some(1..)) => return Ordering::Less,
                 (self_digit, rhs_digit) => match self_digit
                     .unwrap_or_default()
                     .cmp(&rhs_digit.unwrap_or_default())
@@ -863,6 +1070,25 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Normalize for BigInt<
 
     fn normalize(&mut self) {
         self.0.normalize();
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<Denormal<B>>
+    for Denormal<BigInt<BASE, B>>
+{
+    fn from(value: Denormal<B>) -> Self {
+        Denormal(BigInt(value.0))
+    }
+}
+
+impl<const BASE: usize, B, BB> From<BB> for Denormal<BigInt<BASE, B>>
+where
+    B: BigIntImplementation<{ BASE }>,
+    BB: BigIntBuilder<{ BASE }> + Into<Denormal<B>>,
+{
+    fn from(value: BB) -> Self {
+        let int_impl: Denormal<B> = value.into();
+        int_impl.into()
     }
 }
 
@@ -914,11 +1140,19 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> FromStr for BigInt<BA
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> FromIterator<Digit> for BigInt<BASE, B> {
     fn from_iter<T: IntoIterator<Item = Digit>>(iter: T) -> Self {
+        iter.into_iter().collect::<Denormal<Self>>().unwrap()
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> FromIterator<Digit>
+    for Denormal<BigInt<BASE, B>>
+{
+    fn from_iter<T: IntoIterator<Item = Digit>>(iter: T) -> Self {
         let mut builder = B::Builder::new();
         for digit in iter {
             builder.push_back(digit);
         }
-        builder.build().into()
+        builder.into().into()
     }
 }
 
@@ -928,7 +1162,23 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<Vec<Digit>> for 
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<Vec<Digit>>
+    for Denormal<BigInt<BASE, B>>
+{
+    fn from(value: Vec<Digit>) -> Self {
+        value.into_iter().collect()
+    }
+}
+
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<&[Digit]> for BigInt<BASE, B> {
+    fn from(value: &[Digit]) -> Self {
+        value.into_iter().copied().collect()
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> From<&[Digit]>
+    for Denormal<BigInt<BASE, B>>
+{
     fn from(value: &[Digit]) -> Self {
         value.into_iter().copied().collect()
     }
@@ -942,13 +1192,33 @@ impl<const BASE: usize, const N: usize, B: BigIntImplementation<{ BASE }>> From<
     }
 }
 
+impl<const BASE: usize, const N: usize, B: BigIntImplementation<{ BASE }>> From<[Digit; N]>
+    for Denormal<BigInt<BASE, B>>
+{
+    fn from(value: [Digit; N]) -> Self {
+        value.into_iter().collect()
+    }
+}
+
 impl<const N: usize, B: BigIntImplementation<256>> From<&[u8; N]> for BigInt<256, B> {
     fn from(value: &[u8; N]) -> Self {
         value.into_iter().map(|d| *d as Digit).collect()
     }
 }
 
+impl<const N: usize, B: BigIntImplementation<256>> From<&[u8; N]> for Denormal<BigInt<256, B>> {
+    fn from(value: &[u8; N]) -> Self {
+        value.into_iter().map(|d| *d as Digit).collect()
+    }
+}
+
 impl<B: BigIntImplementation<256>> From<&[u8]> for BigInt<256, B> {
+    fn from(value: &[u8]) -> Self {
+        value.into_iter().map(|d| *d as Digit).collect()
+    }
+}
+
+impl<B: BigIntImplementation<256>> From<&[u8]> for Denormal<BigInt<256, B>> {
     fn from(value: &[u8]) -> Self {
         value.into_iter().map(|d| *d as Digit).collect()
     }
@@ -1040,6 +1310,17 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Display for BigInt<BA
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Display for Denormal<BigInt<BASE, B>> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.display(STANDARD_ALPHABET)
+                .map_err(|_| std::fmt::Error)?
+        )
+    }
+}
+
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Neg for BigInt<BASE, B> {
     type Output = Self;
 
@@ -1049,179 +1330,95 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Neg for BigInt<BASE, 
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Neg for Denormal<BigInt<BASE, B>> {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Denormal(-self.0)
+    }
+}
+
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Add for BigInt<BASE, B> {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        if self.sign() != rhs.sign() {
-            self - (-rhs)
-        } else {
-            let sign = self.sign();
-            let mut carry = 0;
-            let mut result = B::Builder::new();
-            for i in 1.. {
-                match (self.get_back(i), rhs.get_back(i), carry) {
-                    (None, None, 0) => break,
-                    (left_digit, right_digit, carry_in) => {
-                        let left_digit = left_digit.unwrap_or_default() as DoubleDigit;
-                        let right_digit = right_digit.unwrap_or_default() as DoubleDigit;
-                        let mut sum = left_digit + right_digit + carry_in;
-                        if sum >= BASE as DoubleDigit {
-                            sum -= BASE as DoubleDigit;
-                            carry = 1;
-                        } else {
-                            carry = 0;
-                        }
-                        result.push_front(sum as Digit);
-                    }
-                }
-            }
-            result.with_sign(sign).build().into()
-        }
+        self.add_denormal(Denormal(rhs)).unwrap()
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Add for Denormal<BigInt<BASE, B>> {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        self.add_denormal(rhs)
     }
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> AddAssign for BigInt<BASE, B> {
     fn add_assign(&mut self, rhs: Self) {
-        if self.sign() != rhs.sign() {
-            *self -= -rhs;
-        } else {
-            let self_len = self.len();
-            let mut carry = 0;
-            for i in 1.. {
-                match (self.get_back(i), rhs.get_back(i), carry) {
-                    (None, None, 0) => break,
-                    (left_digit, right_digit, carry_in) => {
-                        let left_digit = left_digit.unwrap_or_default() as DoubleDigit;
-                        let right_digit = right_digit.unwrap_or_default() as DoubleDigit;
-                        let mut sum = left_digit + right_digit + carry_in;
-                        if sum >= BASE as DoubleDigit {
-                            sum -= BASE as DoubleDigit;
-                            carry = 1;
-                        } else {
-                            carry = 0;
-                        }
-                        if i <= self_len {
-                            self.set_digit(self_len - i, sum as Digit);
-                        } else {
-                            self.push_front(sum as Digit);
-                        }
-                    }
-                }
-            }
-        }
+        self.add_assign_denormal(Denormal(rhs));
+        self.normalize();
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> AddAssign for Denormal<BigInt<BASE, B>> {
+    fn add_assign(&mut self, rhs: Self) {
+        self.add_assign_denormal(rhs);
     }
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Sub for BigInt<BASE, B> {
     type Output = Self;
 
-    fn sub(mut self, rhs: Self) -> Self::Output {
-        if self.sign() != rhs.sign() {
-            self + (-rhs)
-        } else if rhs.cmp_magnitude(&self).is_gt() {
-            -(rhs - self)
-        } else {
-            let sign = self.sign();
-            let mut result = B::Builder::new();
-            let self_len = self.len();
-            for i in 1.. {
-                match (self.get_back(i), rhs.get_back(i)) {
-                    (None, None) => break,
-                    (left_digit, right_digit) => {
-                        let mut left_digit = left_digit.unwrap_or_default() as DoubleDigit;
-                        let right_digit = right_digit.unwrap_or_default() as DoubleDigit;
-                        if left_digit < right_digit {
-                            for j in i + 1.. {
-                                match self.get_back(j) {
-                                    None => unreachable!("big int subtraction with overflow"),
-                                    Some(0) => {
-                                        self.set_digit(self_len - j, (BASE - 1) as Digit);
-                                    }
-                                    Some(digit) => {
-                                        self.set_digit(self_len - j, digit - 1);
-                                        break;
-                                    }
-                                }
-                            }
-                            left_digit += BASE as DoubleDigit;
-                        }
-                        result.push_front((left_digit - right_digit) as Digit);
-                    }
-                }
-            }
-            result.with_sign(sign).build().into()
-        }
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.sub_denormal(Denormal(rhs)).unwrap()
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Sub for Denormal<BigInt<BASE, B>> {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.sub_denormal(rhs)
     }
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> SubAssign for BigInt<BASE, B> {
-    fn sub_assign(&mut self, mut rhs: Self) {
-        if self.sign() != rhs.sign() {
-            *self += -rhs;
-        } else if rhs.cmp_magnitude(self).is_gt() {
-            rhs -= self.clone();
-            *self = -rhs;
-        } else {
-            let self_len = self.len();
-            for i in 1.. {
-                match (self.get_back(i), rhs.get_back(i)) {
-                    (None, None) => break,
-                    (left_digit, right_digit) => {
-                        let mut left_digit = left_digit.unwrap_or_default() as DoubleDigit;
-                        let right_digit = right_digit.unwrap_or_default() as DoubleDigit;
-                        if left_digit < right_digit {
-                            for j in i + 1.. {
-                                match self.get_back(j) {
-                                    None => unreachable!("big int subtraction with overflow"),
-                                    Some(0) => {
-                                        self.set_digit(self_len - j, (BASE - 1) as Digit);
-                                    }
-                                    Some(digit) => {
-                                        self.set_digit(self_len - j, digit - 1);
-                                        break;
-                                    }
-                                }
-                            }
-                            left_digit += BASE as DoubleDigit;
-                        }
-                        let difference = (left_digit - right_digit) as Digit;
-                        if i <= self_len {
-                            self.set_digit(self_len - i, difference);
-                        } else {
-                            self.push_front(difference);
-                        }
-                    }
-                }
-            }
-        }
+    fn sub_assign(&mut self, rhs: Self) {
+        self.sub_assign_denormal(Denormal(rhs));
         self.normalize();
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> SubAssign for Denormal<BigInt<BASE, B>> {
+    fn sub_assign(&mut self, rhs: Self) {
+        self.sub_assign_denormal(rhs);
     }
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Mul for BigInt<BASE, B> {
     type Output = Self;
 
-    fn mul(mut self, mut rhs: Self) -> Self::Output {
-        let sign = self.sign() * rhs.sign();
-        self.set_sign(Positive);
-        rhs.set_sign(Positive);
-        let mut result = Self::zero();
-        for i in 1.. {
-            if let Some(digit) = self.get_back(i) {
-                for _ in 0..digit {
-                    result += rhs.clone();
-                }
-                rhs.shl_assign(1);
-            } else {
-                break;
-            }
-        }
-        result.with_sign(sign).normalized()
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.mul_denormal(Denormal(rhs)).unwrap()
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Mul for Denormal<BigInt<BASE, B>> {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.mul_denormal(rhs)
     }
 }
 
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> MulAssign for BigInt<BASE, B> {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = self.clone() * rhs;
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> MulAssign for Denormal<BigInt<BASE, B>> {
     fn mul_assign(&mut self, rhs: Self) {
         *self = self.clone() * rhs;
     }
@@ -1235,7 +1432,21 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Div for BigInt<BASE, 
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Div for Denormal<BigInt<BASE, B>> {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        self.div_rem_denormal(rhs).unwrap().0
+    }
+}
+
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> DivAssign for BigInt<BASE, B> {
+    fn div_assign(&mut self, rhs: Self) {
+        *self = self.clone() / rhs;
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> DivAssign for Denormal<BigInt<BASE, B>> {
     fn div_assign(&mut self, rhs: Self) {
         *self = self.clone() / rhs;
     }
@@ -1262,6 +1473,14 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Shl for BigInt<BASE, 
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Shl for Denormal<BigInt<BASE, B>> {
+    type Output = Self;
+
+    fn shl(self, rhs: Self) -> Self::Output {
+        self.shl(rhs.unwrap().into())
+    }
+}
+
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> ShlAssign for BigInt<BASE, B> {
     /// Multiply the int by BASE^amount in place.
     ///
@@ -1279,6 +1498,12 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> ShlAssign for BigInt<
     /// ```
     fn shl_assign(&mut self, rhs: Self) {
         self.shl_assign(rhs.into());
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> ShlAssign for Denormal<BigInt<BASE, B>> {
+    fn shl_assign(&mut self, rhs: Self) {
+        self.shl_assign(rhs.unwrap().into());
     }
 }
 
@@ -1303,6 +1528,14 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Shr for BigInt<BASE, 
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Shr for Denormal<BigInt<BASE, B>> {
+    type Output = Self;
+
+    fn shr(self, rhs: Self) -> Self::Output {
+        self.shr(rhs.unwrap().into())
+    }
+}
+
 impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> ShrAssign for BigInt<BASE, B> {
     /// Divide the int by BASE^amount in place.
     ///
@@ -1323,6 +1556,12 @@ impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> ShrAssign for BigInt<
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> ShrAssign for Denormal<BigInt<BASE, B>> {
+    fn shr_assign(&mut self, rhs: Self) {
+        self.shr_assign(rhs.unwrap().into())
+    }
+}
+
 impl<const BASE: usize, B> Ord for BigInt<BASE, B>
 where
     B: BigIntImplementation<{ BASE }>,
@@ -1337,6 +1576,12 @@ where
     }
 }
 
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Ord for Denormal<BigInt<BASE, B>> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
 impl<const BASE: usize, B> PartialOrd for BigInt<BASE, B>
 where
     B: BigIntImplementation<{ BASE }>,
@@ -1345,3 +1590,19 @@ where
         Some(self.cmp(other))
     }
 }
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> PartialOrd
+    for Denormal<BigInt<BASE, B>>
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> PartialEq for Denormal<BigInt<BASE, B>> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<const BASE: usize, B: BigIntImplementation<{ BASE }>> Eq for Denormal<BigInt<BASE, B>> {}

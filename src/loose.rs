@@ -1,12 +1,12 @@
 //! loosely packed big int implementation.
-//! 
+//!
 //! ```
 //! use big_int::prelude::*;
-//! 
+//!
 //! let mut a: LooseInt<10> = 13.into();
 //! a *= 500.into();
 //! assert_eq!(a, 6500.into());
-//! 
+//!
 //! a.shr_assign(2);
 //! a += 17.into();
 //! assert_eq!(a, 82.into());
@@ -15,20 +15,20 @@
 use crate::prelude::*;
 use std::{collections::VecDeque, vec};
 
-/// A loosely-packed arbitrary base big int. 
+/// A loosely-packed arbitrary base big int.
 /// See `Loose<BASE>` for implementation details.
 pub type LooseInt<const BASE: usize> = BigInt<BASE, Loose<BASE>>;
 
-/// A loosely-packed arbitrary base big int implementation. 
-/// Supports any base from 2-u64::MAX. 
-/// 
-/// Each digit requires 8 bytes of storage, making this a somewhat space-inefficient 
+/// A loosely-packed arbitrary base big int implementation.
+/// Supports any base from 2-u64::MAX.
+///
+/// Each digit requires 8 bytes of storage, making this a somewhat space-inefficient
 /// implementation. however, the lack of additional complexity improves runtime efficiency on the
 /// tightly-packed implementation.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let a: LooseInt<10> = 593.into();
 /// let b = a * 96.into();
 /// assert_eq!(b, 56928.into());
@@ -90,26 +90,6 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
         Loose { sign, ..self }
     }
 
-    /// Return a normalized version of the int. Remove trailing zeros, and disable the parity flag
-    /// if the resulting number is zero.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
-    /// assert_eq!(n.normalized(), 83.into());
-    /// ```
-    fn normalized(self) -> Self {
-        match self.digits.iter().position(|digit| *digit != 0) {
-            None => Self::zero(),
-            Some(pos @ 1..) => Loose {
-                digits: self.digits[pos..].to_vec(),
-                ..self
-            },
-            _ => self,
-        }
-    }
-
     fn sign(&self) -> Sign {
         self.sign
     }
@@ -144,12 +124,34 @@ impl<const BASE: usize> BigIntImplementation<BASE> for Loose<BASE> {
     }
 }
 
+impl<const BASE: usize> Normalize for Loose<BASE> {
+    /// Return a normalized version of the int. Remove trailing zeros, and disable the parity flag
+    /// if the resulting number is zero.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    /// assert_eq!(n.normalized(), 83.into());
+    /// ```
+    fn normalized(self) -> Self {
+        match self.digits.iter().position(|digit| *digit != 0) {
+            None => Self::zero(),
+            Some(pos @ 1..) => Loose {
+                digits: self.digits[pos..].to_vec(),
+                ..self
+            },
+            _ => self,
+        }
+    }
+}
+
 /// An iterator over the digits of a `LooseInt`.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
 /// use std::iter::Rev;
-/// 
+///
 /// let a: LooseInt<10> = 12345.into();
 /// let it: LooseIter<10> = a.iter();
 /// let rev_it: Rev<LooseIter<10>> = a.iter().rev();
@@ -189,13 +191,13 @@ impl<const BASE: usize> DoubleEndedIterator for LooseIter<'_, BASE> {
 }
 
 /// A builder for a `Loose` int.
-/// 
+///
 /// You're most likely better off using one of the `From` implementations
 /// as opposed to directly building your int via a builder.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let mut a = LooseBuilder::<10>::new();
 /// a.push_back(5);
 /// a.push_back(3);
@@ -238,14 +240,28 @@ impl<const BASE: usize> BigIntBuilder<BASE> for LooseBuilder<BASE> {
 
 impl<const BASE: usize> Build<Loose<BASE>> for LooseBuilder<BASE> {
     fn build(self) -> Loose<BASE> {
-        Loose::<BASE>::from(self).normalized()
+        Denormal::<Loose<BASE>>::from(self).unwrap()
     }
 }
 
-impl<const BASE: usize> From<LooseBuilder<BASE>> for Loose<BASE> {
+impl<const BASE: usize> From<LooseBuilder<BASE>> for Denormal<Loose<BASE>> {
     fn from(value: LooseBuilder<BASE>) -> Self {
         let sign = value.sign;
         let digits = value.digits.into();
-        Loose { sign, digits }
+        Denormal(Loose { sign, digits })
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::prelude::*;
+
+    
+    #[test]
+    fn cmp_magnitude() {
+        let a = BigInt(Loose::<256> { sign: Positive, digits: vec![255, 255, 255, 72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33] });
+        let b = BigInt(Loose::<256> { sign: Positive, digits: vec![63, 255, 255, 255, 72, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 0] });
+        assert_eq!(a.cmp_magnitude(&b), Ordering::Less);
     }
 }
