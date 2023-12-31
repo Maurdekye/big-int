@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-big-int-proc = { path = "big-int-proc" }
+big-int-proc = "1.0.0"
 thiserror = "1.0.51"
 
 [dev-dependencies]
