@@ -3,16 +3,17 @@
 //! ```
 //! use big_int::prelude::*;
 //! 
-//! let mut a: TightInt<10> = 13.into();
+//! let mut a: Tight<10> = 13.into();
 //! a *= 500.into();
 //! assert_eq!(a, 6500.into());
 //! 
-//! a.shr_assign(2);
+//! a.shr_assign_inner(2);
 //! a += 17.into();
 //! assert_eq!(a, 82.into());
 //! ```
 
 use std::collections::VecDeque;
+use big_int_proc::BigInt;
 
 use crate::prelude::*;
 
@@ -25,10 +26,6 @@ type Datum = u8;
 /// Size of the chosen datum unit, in bits.
 const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 
-/// A tightly-packed arbitrary base big int.
-/// See `Tight<BASE>` for implementation details.
-pub type TightInt<const BASE: usize> = BigInt<BASE, Tight<BASE>>;
-
 /// A tightly-packed arbitrary base big int implementation.
 /// Supports any base from 2-u64::MAX.
 ///
@@ -40,11 +37,11 @@ pub type TightInt<const BASE: usize> = BigInt<BASE, Tight<BASE>>;
 /// ```
 /// use big_int::prelude::*;
 ///
-/// let a: TightInt<10> = 593.into();
+/// let a: Tight<10> = 593.into();
 /// let b = a * 96.into();
 /// assert_eq!(b, 56928.into());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, BigInt)]
 pub struct Tight<const BASE: usize> {
     sign: Sign,
     data: VecDeque<Datum>,
@@ -56,24 +53,45 @@ impl<const BASE: usize> Tight<BASE> {
     /// Number of bits required to store a single digit in the chosen `BASE`.
     const BITS_PER_DIGIT: usize = bits_per_digit(BASE);
 
-    /// Pull an owned builder of the `Tight` int from a mutable reference of itself; 
-    /// used for accessing pushing and alignment builder methods without copying the underlying
-    /// int.
-    fn replace_with_builder(&mut self) -> TightBuilder<BASE> {
-        std::mem::replace(
-            self,
-            Self {
-                sign: Positive,
-                data: VecDeque::new(),
-                start_offset: 0,
-                end_offset: 0,
-            },
-        )
-        .into()
+    fn aligned(mut self) -> Self {
+        let empty_cells = self.start_offset / DATUM_SIZE;
+        self.start_offset -= empty_cells * DATUM_SIZE;
+        self.end_offset -= empty_cells * DATUM_SIZE;
+        let data_cells = self.data.into_iter().skip(empty_cells);
+        self.data = if self.start_offset == 0 {
+            data_cells.collect()
+        } else {
+            let data_length = (self.end_offset - self.start_offset).div_ceil(DATUM_SIZE);
+            let mut data = VecDeque::new();
+            let left_half_offset = DATUM_SIZE - self.start_offset;
+            let left_half_mask = mask!(self.start_offset) << left_half_offset;
+            let right_half_mask = mask!(DATUM_SIZE - self.start_offset);
+            let mut right_half = None;
+            for datum in data_cells {
+                if let Some(right_half) = right_half {
+                    let left_half = (datum & left_half_mask) >> left_half_offset;
+                    let aligned_datum = left_half | right_half;
+                    data.push_back(aligned_datum);
+                    if data.len() >= data_length {
+                        break;
+                    }
+                }
+                right_half = Some((datum & right_half_mask) << self.start_offset);
+            }
+            if let Some(right_half) = right_half {
+                if data.len() < data_length {
+                    data.push_back(right_half);
+                }
+            }
+            self.end_offset -= self.start_offset;
+            self.start_offset = 0;
+            data
+        };
+        self
     }
 }
 
-impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
+impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
     type Builder = TightBuilder<{ BASE }>;
     type DigitIterator<'a> = TightIter<'a, BASE>;
 
@@ -149,18 +167,47 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
     }
 
     fn push_back(&mut self, digit: Digit) {
-        let mut builder = self.replace_with_builder();
-        builder.push_back(digit);
-        *self = builder.into();
+        let mut bits_left_to_set = Self::BITS_PER_DIGIT;
+        while bits_left_to_set > 0 {
+            let datum_index = self.end_offset / DATUM_SIZE;
+            if datum_index >= self.data.len() {
+                self.data.push_back(0);
+            }
+            let bit_in_datum = self.end_offset % DATUM_SIZE;
+            let space_left_in_datum = DATUM_SIZE - bit_in_datum;
+            let bits_to_take = space_left_in_datum.min(bits_left_to_set);
+            self.end_offset += bits_to_take;
+            bits_left_to_set -= bits_to_take;
+            let digit_mask = mask!(bits_to_take) << bits_left_to_set;
+            let piece_of_digit = (((digit_mask & digit) >> bits_left_to_set)
+                << (DATUM_SIZE - bits_to_take))
+                >> bit_in_datum;
+            self.data[datum_index] |= piece_of_digit as Datum;
+        }
     }
 
     fn push_front(&mut self, digit: Digit) {
-        let mut builder = self.replace_with_builder();
-        builder.push_front(digit);
-        *self = builder.aligned().into();
+        let mut bits_left_to_set = Self::BITS_PER_DIGIT;
+        while bits_left_to_set > 0 {
+            if self.start_offset == 0 {
+                self.data.push_front(0);
+                self.start_offset += DATUM_SIZE;
+                self.end_offset += DATUM_SIZE;
+            }
+            let datum_index = (self.start_offset - 1) / DATUM_SIZE;
+            let space_left_in_datum = (self.start_offset - 1) % DATUM_SIZE + 1;
+            let bits_to_take = space_left_in_datum.min(bits_left_to_set);
+            self.start_offset -= bits_to_take;
+            let mask_offset = Self::BITS_PER_DIGIT - bits_left_to_set;
+            let digit_mask = mask!(bits_to_take) << mask_offset;
+            bits_left_to_set -= bits_to_take;
+            let piece_of_digit =
+                ((digit_mask & digit) >> mask_offset) << (DATUM_SIZE - space_left_in_datum);
+            self.data[datum_index] |= piece_of_digit as Datum;
+        }
     }
 
-    fn shr_assign(&mut self, amount: usize) {
+    fn shr_assign_inner(&mut self, amount: usize) {
         self.end_offset = self
             .end_offset
             .checked_sub(amount * Self::BITS_PER_DIGIT)
@@ -169,7 +216,7 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
         self.normalize();
     }
 
-    fn shl_assign(&mut self, amount: usize) {
+    fn shl_assign_inner(&mut self, amount: usize) {
         self.end_offset += Self::BITS_PER_DIGIT * amount;
         let new_len = self.end_offset.div_ceil(DATUM_SIZE);
         let cur_len = self.data.len();
@@ -194,15 +241,9 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
         if self.start_offset >= self.end_offset {
             Self::zero()
         } else if self.start_offset > 0 {
-            TightBuilder::<BASE>::from(self).aligned().into()
+            self.aligned()
         } else {
-            if self
-                .data
-                .len()
-                .checked_sub(self.end_offset.div_ceil(DATUM_SIZE))
-                .unwrap_or_default()
-                > 0
-            {
+            if self.data.len() * DATUM_SIZE >= self.end_offset + DATUM_SIZE {
                 self.data = self
                     .data
                     .into_iter()
@@ -214,24 +255,13 @@ impl<const BASE: usize> BigIntImplementation<{ BASE }> for Tight<BASE> {
     }
 }
 
-impl<const BASE: usize> From<Tight<{ BASE }>> for TightBuilder<BASE> {
-    fn from(value: Tight<{ BASE }>) -> Self {
-        Self {
-            sign: value.sign,
-            data: value.data,
-            start_offset: value.start_offset,
-            end_offset: value.end_offset,
-        }
-    }
-}
-
-/// An iterator over the digits of a `TightInt`.
-/// 
+/// An iterator over the digits of a `Tight`.
+///
 /// ```
 /// use big_int::prelude::*;
 /// use std::iter::Rev;
-/// 
-/// let a: TightInt<10> = 12345.into();
+///
+/// let a: Tight<10> = 12345.into();
 /// let it: TightIter<10> = a.iter();
 /// let rev_it: Rev<TightIter<10>> = a.iter().rev();
 /// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
@@ -268,145 +298,60 @@ impl<const BASE: usize> DoubleEndedIterator for TightIter<'_, BASE> {
 }
 
 /// A builder for a `Tight` int.
-/// 
+///
 /// You're most likely better off using one of the `From` implementations
 /// as opposed to directly building your int via a builder.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let mut a = TightBuilder::<10>::new();
 /// a.push_back(5);
 /// a.push_back(3);
 /// a.push_back(0);
 /// a.push_back(4);
 /// let a: Tight<10> = a.build();
-/// let a: TightInt<10> = BigInt::from(a);
 /// assert_eq!(a, 5304.into());
 /// ```
 #[derive(Debug)]
-pub struct TightBuilder<const BASE: usize> {
-    sign: Sign,
-    data: VecDeque<Datum>,
-    start_offset: usize,
-    end_offset: usize,
-}
+pub struct TightBuilder<const BASE: usize>(Tight<BASE>);
 
-impl<const BASE: usize> TightBuilder<BASE> {
-    const BITS_PER_DIGIT: usize = bits_per_digit(BASE);
-
-    fn aligned(mut self) -> Self {
-        let empty_cells = self.start_offset / DATUM_SIZE;
-        self.start_offset -= empty_cells * DATUM_SIZE;
-        self.end_offset -= empty_cells * DATUM_SIZE;
-        let data_cells = self.data.into_iter().skip(empty_cells);
-        self.data = if self.start_offset == 0 {
-            data_cells.collect()
-        } else {
-            let data_length = (self.end_offset - self.start_offset).div_ceil(DATUM_SIZE);
-            let mut data = VecDeque::new();
-            let left_half_offset = DATUM_SIZE - self.start_offset;
-            let left_half_mask = mask!(self.start_offset) << left_half_offset;
-            let right_half_mask = mask!(DATUM_SIZE - self.start_offset);
-            let mut right_half = None;
-            for datum in data_cells {
-                if let Some(right_half) = right_half {
-                    let left_half = (datum & left_half_mask) >> left_half_offset;
-                    let aligned_datum = left_half | right_half;
-                    data.push_back(aligned_datum);
-                    if data.len() >= data_length {
-                        break;
-                    }
-                }
-                right_half = Some((datum & right_half_mask) << self.start_offset);
-            }
-            if let Some(right_half) = right_half {
-                if data.len() < data_length {
-                    data.push_back(right_half);
-                }
-            }
-            self.end_offset -= self.start_offset;
-            self.start_offset = 0;
-            data
-        };
-        self
-    }
-}
-
-impl<const BASE: usize> BigIntBuilder<{ BASE }> for TightBuilder<BASE> {
+impl<const BASE: usize> BigIntBuilder<BASE> for TightBuilder<BASE> {
     fn new() -> Self {
-        TightBuilder {
+        Self(Tight {
             sign: Positive,
             data: VecDeque::new(),
             start_offset: 0,
             end_offset: 0,
-        }
+        })
     }
 
     fn push_front(&mut self, digit: Digit) {
-        let mut bits_left_to_set = Self::BITS_PER_DIGIT;
-        while bits_left_to_set > 0 {
-            if self.start_offset == 0 {
-                self.data.push_front(0);
-                self.start_offset += DATUM_SIZE;
-                self.end_offset += DATUM_SIZE;
-            }
-            let datum_index = (self.start_offset - 1) / DATUM_SIZE;
-            let space_left_in_datum = (self.start_offset - 1) % DATUM_SIZE + 1;
-            let bits_to_take = space_left_in_datum.min(bits_left_to_set);
-            self.start_offset -= bits_to_take;
-            let mask_offset = Self::BITS_PER_DIGIT - bits_left_to_set;
-            let digit_mask = mask!(bits_to_take) << mask_offset;
-            bits_left_to_set -= bits_to_take;
-            let piece_of_digit =
-                ((digit_mask & digit) >> mask_offset) << (DATUM_SIZE - space_left_in_datum);
-            self.data[datum_index] |= piece_of_digit as Datum;
-        }
+        self.0.push_front(digit);
     }
 
     fn push_back(&mut self, digit: Digit) {
-        let mut bits_left_to_set = Self::BITS_PER_DIGIT;
-        while bits_left_to_set > 0 {
-            let datum_index = self.end_offset / DATUM_SIZE;
-            if datum_index >= self.data.len() {
-                self.data.push_back(0);
-            }
-            let bit_in_datum = self.end_offset % DATUM_SIZE;
-            let space_left_in_datum = DATUM_SIZE - bit_in_datum;
-            let bits_to_take = space_left_in_datum.min(bits_left_to_set);
-            self.end_offset += bits_to_take;
-            bits_left_to_set -= bits_to_take;
-            let digit_mask = mask!(bits_to_take) << bits_left_to_set;
-            let piece_of_digit = (((digit_mask & digit) >> bits_left_to_set)
-                << (DATUM_SIZE - bits_to_take))
-                >> bit_in_datum;
-            self.data[datum_index] |= piece_of_digit as Datum;
-        }
+        self.0.push_back(digit);
     }
 
     fn is_empty(&self) -> bool {
-        self.start_offset == self.end_offset
+        self.0.start_offset >= self.0.end_offset
     }
 
     fn with_sign(self, sign: Sign) -> Self {
-        Self { sign, ..self }
+        Self(self.0.with_sign(sign))
     }
 }
 
 impl<const BASE: usize> Build<Tight<BASE>> for TightBuilder<BASE> {
     fn build(self) -> Tight<BASE> {
-        Tight::<BASE>::from(self.aligned()).normalized()
+        self.0.normalized()
     }
 }
 
 impl<const BASE: usize> From<TightBuilder<BASE>> for Tight<BASE> {
-    fn from(builder: TightBuilder<BASE>) -> Self {
-        Self {
-            sign: builder.sign,
-            data: builder.data,
-            start_offset: builder.start_offset,
-            end_offset: builder.end_offset,
-        }
+    fn from(value: TightBuilder<BASE>) -> Self {
+        value.0
     }
 }
 
@@ -435,7 +380,7 @@ mod tests {
         builder.push_back(0);
         builder.push_back(0);
         builder.push_back(1);
-        assert_eq!(builder.data, VecDeque::from([0b11010010]));
+        assert_eq!(builder.0.data, VecDeque::from([0b11010010]));
     }
 
     #[test]
@@ -445,7 +390,7 @@ mod tests {
         builder.push_back(0b00);
         builder.push_back(0b11);
         builder.push_back(0b00);
-        assert_eq!(builder.data, VecDeque::from([0b11001100]));
+        assert_eq!(builder.0.data, VecDeque::from([0b11001100]));
     }
 
     #[test]
@@ -454,7 +399,7 @@ mod tests {
         builder.push_back(0b1010101010101);
         builder.push_back(0b1111111111111);
         assert_eq!(
-            builder.data,
+            builder.0.data,
             VecDeque::from([0b10101010, 0b10101111, 0b11111111, 0b11000000])
         );
     }
@@ -466,7 +411,7 @@ mod tests {
         builder.push_back(0b10010010010010010010);
         builder.push_back(0b01101101101101101101);
         assert_eq!(
-            builder.data,
+            builder.0.data,
             VecDeque::from([
                 0b11111111, 0b11111111, 0b11111001, 0b00100100, 0b10010010, 0b01101101, 0b10110110,
                 0b11010000
@@ -484,7 +429,7 @@ mod tests {
         builder.push_front(0);
         builder.push_front(0);
         builder.push_front(1);
-        assert_eq!(builder.data, VecDeque::from([0b01001011]));
+        assert_eq!(builder.0.data, VecDeque::from([0b01001011]));
     }
 
     #[test]
@@ -494,7 +439,7 @@ mod tests {
         builder.push_front(0b00);
         builder.push_front(0b11);
         builder.push_front(0b00);
-        assert_eq!(builder.data, VecDeque::from([0b00110011]));
+        assert_eq!(builder.0.data, VecDeque::from([0b00110011]));
     }
 
     #[test]
@@ -503,7 +448,7 @@ mod tests {
         builder.push_front(0b1111111111111);
         builder.push_front(0b1010101010101);
         assert_eq!(
-            builder.data,
+            builder.0.data,
             VecDeque::from([0b00000010, 0b10101010, 0b10111111, 0b11111111])
         );
     }
@@ -515,7 +460,7 @@ mod tests {
         builder.push_front(0b10010010010010010010);
         builder.push_front(0b01101101101101101101);
         assert_eq!(
-            builder.data,
+            builder.0.data,
             VecDeque::from([
                 0b00000110, 0b11011011, 0b01101101, 0b10010010, 0b01001001, 0b00101111, 0b11111111,
                 0b11111111
@@ -593,10 +538,10 @@ mod tests {
 
     // macro_rules! base_conv_print {
     //     ($d:expr; $($b:literal),*) => {
-    //         let a: TightInt<256> = $d.into();
+    //         let a: Tight<256> = $d.into();
     //         printbytes!(a.data);
     //         $(
-    //             let a: TightInt<$b> = a.convert();
+    //             let a: Tight<$b> = a.convert();
     //             println!("{}: ", $b);
     //             printbytes!(a.data);
     //         )*

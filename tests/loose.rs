@@ -8,33 +8,33 @@ use std::str::FromStr;
 
 #[test]
 fn parse() {
-    assert_eq!("125".parse(), Ok(LooseInt::<10>::from(125)));
-    assert_eq!("-500".parse(), Ok(LooseInt::<10>::from(-500)));
-    assert_eq!("0".parse(), Ok(LooseInt::<10>::from(0)));
+    assert_eq!("125".parse(), Ok(Loose::<10>::from(125)));
+    assert_eq!("-500".parse(), Ok(Loose::<10>::from(-500)));
+    assert_eq!("0".parse(), Ok(Loose::<10>::from(0)));
     assert_eq!(
             "1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".parse(),
-        Ok(LooseInt::<10>::from(vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]))
+        Ok(vec![1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].into_iter().collect::<Loose<10>>())
     )
 }
 
 #[test]
 fn parse_error() {
     assert_eq!(
-        LooseInt::<10>::from_str(""),
+        Loose::<10>::from_str(""),
         Err(BigIntError::ParseFailed(ParseError::NotEnoughCharacters))
     );
     assert_eq!(
-        LooseInt::<10>::from_str("-"),
+        Loose::<10>::from_str("-"),
         Err(BigIntError::ParseFailed(ParseError::NotEnoughCharacters))
     );
     assert_eq!(
-        LooseInt::<10>::from_str("5B"),
+        Loose::<10>::from_str("5B"),
         Err(BigIntError::ParseFailed(ParseError::DigitTooLarge(
             'B', 11, 10
         )))
     );
     assert_eq!(
-        LooseInt::<10>::from_str("13_4"),
+        Loose::<10>::from_str("13_4"),
         Err(BigIntError::ParseFailed(ParseError::UnrecognizedCharacter(
             '_'
         )))
@@ -43,88 +43,88 @@ fn parse_error() {
 
 #[test]
 fn from_primitive() {
-    assert_eq!(LooseInt::<10>::from(524_u128), vec![5, 2, 4].into());
+    assert_eq!(Loose::<10>::from(524_u128), vec![5, 2, 4].into_iter().collect());
     assert_eq!(
-        LooseInt::<10>::from(-301_isize),
-        -LooseInt::<10>::from(vec![3, 0, 1])
+        Loose::<10>::from(-301_isize),
+        -vec![3, 0, 1].into_iter().collect::<Loose<10>>()
     );
-    assert_eq!(LooseInt::<10>::from(255_u8), vec![2, 5, 5].into());
+    assert_eq!(Loose::<10>::from(255_u8), vec![2, 5, 5].into_iter().collect());
 }
 
 #[test]
 fn normalized() {
     assert_eq!(
-        BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 0, 0]) }).normalized(),
+        unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 0, 0]) }.normalized(),
         0.into()
     );
     assert_eq!(
-        (-BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0]) })).normalized(),
+        unsafe { -Loose::<10>::from_raw_parts(vec![0, 0]) }.normalized(),
         0.into()
     );
     assert_eq!(
-        BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![]) }).normalized(),
+        unsafe { Loose::<10>::from_raw_parts(vec![]) }.normalized(),
         0.into()
     );
     assert_eq!(
-        BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) }).normalized(),
+        unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) }.normalized(),
         83.into()
     );
 }
 
 #[test]
 fn normalize() {
-    let mut n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 0, 0]) });
+    let mut n = unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 0, 0]) };
     n.normalize();
     assert_eq!(n, 0.into());
-    let mut n = -BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0]) });
+    let mut n = -unsafe { Loose::<10>::from_raw_parts(vec![0, 0]) };
     n.normalize();
     assert_eq!(n, 0.into());
-    let mut n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![]) });
+    let mut n = unsafe { Loose::<10>::from_raw_parts(vec![]) };
     n.normalize();
     assert_eq!(n, 0.into());
-    let mut n = BigInt::from(unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) });
+    let mut n = unsafe { Loose::<10>::from_raw_parts(vec![0, 0, 8, 3]) };
     n.normalize();
     assert_eq!(n, 83.into());
 }
 
 #[test]
 fn addition() {
-    let a: LooseInt<10> = 100.into();
+    let a: Loose<10> = 100.into();
     let b = 21.into();
     assert_eq!(a + b, 121.into());
 }
 
 #[test]
 fn addition_2() {
-    let a: LooseInt<10> = (-26).into();
+    let a: Loose<10> = (-26).into();
     let b = 93.into();
     assert_eq!(a + b, 67.into());
 }
 
 #[test]
 fn addition_3() {
-    let a: LooseInt<10> = (-58).into();
+    let a: Loose<10> = (-58).into();
     let b = 110.into();
     assert_eq!(a + b, 52.into());
 }
 
 #[test]
 fn addition_with_carry() {
-    let a: LooseInt<10> = 15.into();
+    let a: Loose<10> = 15.into();
     let b = 6.into();
     assert_eq!(a + b, 21.into());
 }
 
 #[test]
 fn addition_with_many_carries() {
-    let a: LooseInt<10> = 99999.into();
+    let a: Loose<10> = 99999.into();
     let b = 1.into();
     assert_eq!(a + b, 100000.into());
 }
 
 #[test]
 fn addition_base_16() {
-    let a: LooseInt<16> = "8".parse().unwrap();
+    let a: Loose<16> = "8".parse().unwrap();
     let b = "A".parse().unwrap();
     assert_eq!(a + b, "12".parse().unwrap());
 }
@@ -133,8 +133,8 @@ fn addition_base_16() {
 fn fuzzy_addition_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<10>::from(a + b),
-            LooseInt::from(a) + LooseInt::from(b),
+            Loose::<10>::from(a + b),
+            Loose::from(a) + Loose::from(b),
             "{a} + {b}"
         );
     }
@@ -143,8 +143,8 @@ fn fuzzy_addition_test() {
 #[test]
 fn fuzzy_addassign_test() {
     for (a_, b_) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
-        let a: LooseInt<10> = a_.into();
-        let b: LooseInt<10> = b_.into();
+        let a: Loose<10> = a_.into();
+        let b: Loose<10> = b_.into();
         let mut c = a.clone();
         c += b.clone();
         assert_eq!(a + b, c, "{a_} += {b_}");
@@ -153,35 +153,35 @@ fn fuzzy_addassign_test() {
 
 #[test]
 fn subtraction() {
-    let a: LooseInt<10> = 55.into();
+    let a: Loose<10> = 55.into();
     let b = 14.into();
     assert_eq!(a - b, 41.into());
 }
 
 #[test]
 fn subtraction_2() {
-    let a: LooseInt<10> = 27792.into();
+    let a: Loose<10> = 27792.into();
     let b = 27792.into();
     assert_eq!(a - b, 0.into());
 }
 
 #[test]
 fn subtraction_with_borrow() {
-    let a: LooseInt<10> = 12.into();
+    let a: Loose<10> = 12.into();
     let b = 4.into();
     assert_eq!(a - b, 8.into());
 }
 
 #[test]
 fn subtraction_with_many_borrows() {
-    let a: LooseInt<10> = 100000.into();
+    let a: Loose<10> = 100000.into();
     let b = 1.into();
     assert_eq!(a - b, 99999.into());
 }
 
 #[test]
 fn subtraction_with_overflow() {
-    let a: LooseInt<10> = 50.into();
+    let a: Loose<10> = 50.into();
     let b = 75.into();
     assert_eq!(a - b, (-25).into());
 }
@@ -190,8 +190,8 @@ fn subtraction_with_overflow() {
 fn fuzzy_subtraction_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<10>::from(a - b),
-            LooseInt::from(a) - LooseInt::from(b),
+            Loose::<10>::from(a - b),
+            Loose::from(a) - Loose::from(b),
             "{a} - {b}"
         );
     }
@@ -200,8 +200,8 @@ fn fuzzy_subtraction_test() {
 #[test]
 fn fuzzy_subassign_test() {
     for (a_, b_) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
-        let a: LooseInt<10> = a_.into();
-        let b: LooseInt<10> = b_.into();
+        let a: Loose<10> = a_.into();
+        let b: Loose<10> = b_.into();
         let mut c = a.clone();
         c -= b.clone();
         assert_eq!(a - b, c, "{a_} -= {b_}");
@@ -210,14 +210,14 @@ fn fuzzy_subassign_test() {
 
 #[test]
 fn multiplication() {
-    let a: LooseInt<10> = 13.into();
+    let a: Loose<10> = 13.into();
     let b = 5.into();
     assert_eq!(a * b, 65.into());
 }
 
 #[test]
 fn big_multiplication() {
-    let a: LooseInt<10> = 356432214.into();
+    let a: Loose<10> = 356432214.into();
     let b = 499634.into();
     assert_eq!(a * b, 178085652809676_i128.into());
 }
@@ -226,8 +226,8 @@ fn big_multiplication() {
 fn fuzzy_multiplication_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<10>::from(a * b),
-            LooseInt::from(a) * LooseInt::from(b),
+            Loose::<10>::from(a * b),
+            Loose::from(a) * Loose::from(b),
             "{a} * {b}"
         );
     }
@@ -235,34 +235,34 @@ fn fuzzy_multiplication_test() {
 
 #[test]
 fn division() {
-    let a: LooseInt<10> = 999_999_999.into();
+    let a: Loose<10> = 999_999_999.into();
     let b = 56_789.into();
     assert_eq!(a.div_rem(b), Ok((17_609.into(), 2_498.into())));
 }
 
 #[test]
 fn division_2() {
-    let a: LooseInt<10> = (-25106).into();
+    let a: Loose<10> = (-25106).into();
     let b = 6331.into();
     assert_eq!(a.div_rem(b), Ok(((-3).into(), (-6113).into())));
 }
 
 #[test]
 fn division_3() {
-    let a: LooseInt<10> = (-27792).into();
+    let a: Loose<10> = (-27792).into();
     let b = 6.into();
     assert_eq!(a.div_rem(b), Ok(((-4632).into(), 0.into())));
 }
 
 #[test]
 fn division_4() {
-    let a: LooseInt<256> = 6689728775289925438_u128.into();
+    let a: Loose<256> = 6689728775289925438_u128.into();
     let b = 3680976435299388678_u128.into();
     assert_eq!(
         a.div_rem(b),
         Ok((
-            BigInt::from(unsafe { Loose::from_raw_parts(vec![1]) }),
-            BigInt::from(unsafe { Loose::from_raw_parts(vec![41, 193, 60, 79, 234, 66, 226, 56]) }),
+            unsafe { Loose::from_raw_parts(vec![1]) },
+            unsafe { Loose::from_raw_parts(vec![41, 193, 60, 79, 234, 66, 226, 56]) },
         ))
     );
 }
@@ -272,8 +272,8 @@ fn division_5() {
     let a = 30997532758381152_usize;
     let b = 16;
     assert_eq!(
-        Ok((LooseInt::<10>::from(a / b), (a % b).into())),
-        LooseInt::from(a).div_rem(b.into())
+        Ok((Loose::<10>::from(a / b), (a % b).into())),
+        Loose::from(a).div_rem(b.into())
     );
 }
 
@@ -282,14 +282,14 @@ fn division_6() {
     let a = 10;
     let b = 2;
     assert_eq!(
-        Ok((LooseInt::<10>::from(a / b), (a % b).into())),
-        LooseInt::from(a).div_rem(b.into())
+        Ok((Loose::<10>::from(a / b), (a % b).into())),
+        Loose::from(a).div_rem(b.into())
     );
 }
 
 #[test]
 fn division_by_zero() {
-    let a: LooseInt<10> = 999_999_999.into();
+    let a: Loose<10> = 999_999_999.into();
     let b = 0.into();
     assert_eq!(a.div_rem(b), Err(BigIntError::DivisionByZero));
 }
@@ -299,7 +299,7 @@ fn fuzzy_div_rem_2_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         if b > 0 {
             assert_eq!(
-                LooseInt::<10>::from(a).div_rem(b.into()),
+                Loose::<10>::from(a).div_rem(b.into()),
                 Ok(((a / b).into(), (a % b).into())),
                 "{a} / {b}"
             );
@@ -312,7 +312,7 @@ fn fuzzy_base_256_div_rem_2_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         if b > 0 {
             assert_eq!(
-                LooseInt::<256>::from(a).div_rem(b.into()),
+                Loose::<256>::from(a).div_rem(b.into()),
                 Ok(((a / b).into(), (a % b).into())),
                 "{a} / {b}"
             );
@@ -324,23 +324,23 @@ fn fuzzy_base_256_div_rem_2_test() {
 fn fuzzy_base_2_tests() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<2>::from(a) + b.into(),
+            Loose::<2>::from(a) + b.into(),
             (a + b).into(),
             "{a} + {b}"
         );
         assert_eq!(
-            LooseInt::<2>::from(a) - b.into(),
+            Loose::<2>::from(a) - b.into(),
             (a - b).into(),
             "{a} - {b}"
         );
         assert_eq!(
-            LooseInt::<2>::from(a) * b.into(),
+            Loose::<2>::from(a) * b.into(),
             (a * b).into(),
             "{a} * {b}"
         );
         if b > 0 {
             assert_eq!(
-                LooseInt::<2>::from(a) / b.into(),
+                Loose::<2>::from(a) / b.into(),
                 (a / b).into(),
                 "{a} / {b}"
             );
@@ -352,23 +352,23 @@ fn fuzzy_base_2_tests() {
 fn fuzzy_base_16_tests() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<16>::from(a) + b.into(),
+            Loose::<16>::from(a) + b.into(),
             (a + b).into(),
             "{a} + {b}"
         );
         assert_eq!(
-            LooseInt::<16>::from(a) - b.into(),
+            Loose::<16>::from(a) - b.into(),
             (a - b).into(),
             "{a} - {b}"
         );
         assert_eq!(
-            LooseInt::<16>::from(a) * b.into(),
+            Loose::<16>::from(a) * b.into(),
             (a * b).into(),
             "{a} * {b}"
         );
         if b > 0 {
             assert_eq!(
-                LooseInt::<16>::from(a) / b.into(),
+                Loose::<16>::from(a) / b.into(),
                 (a / b).into(),
                 "{a} / {b}"
             );
@@ -380,23 +380,23 @@ fn fuzzy_base_16_tests() {
 fn fuzzy_base_64_tests() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<64>::from(a) + b.into(),
+            Loose::<64>::from(a) + b.into(),
             (a + b).into(),
             "{a} + {b}"
         );
         assert_eq!(
-            LooseInt::<64>::from(a) - b.into(),
+            Loose::<64>::from(a) - b.into(),
             (a - b).into(),
             "{a} - {b}"
         );
         assert_eq!(
-            LooseInt::<64>::from(a) * b.into(),
+            Loose::<64>::from(a) * b.into(),
             (a * b).into(),
             "{a} * {b}"
         );
         if b > 0 {
             assert_eq!(
-                LooseInt::<64>::from(a) / b.into(),
+                Loose::<64>::from(a) / b.into(),
                 (a / b).into(),
                 "{a} / {b}"
             );
@@ -408,23 +408,23 @@ fn fuzzy_base_64_tests() {
 fn fuzzy_base_256_tests() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<256>::from(a) + b.into(),
+            Loose::<256>::from(a) + b.into(),
             (a + b).into(),
             "{a} + {b}"
         );
         assert_eq!(
-            LooseInt::<256>::from(a) - b.into(),
+            Loose::<256>::from(a) - b.into(),
             (a - b).into(),
             "{a} - {b}"
         );
         assert_eq!(
-            LooseInt::<256>::from(a) * b.into(),
+            Loose::<256>::from(a) * b.into(),
             (a * b).into(),
             "{a} * {b}"
         );
         if b > 0 {
             assert_eq!(
-                LooseInt::<256>::from(a) / b.into(),
+                Loose::<256>::from(a) / b.into(),
                 (a / b).into(),
                 "{a} / {b}"
             );
@@ -435,16 +435,16 @@ fn fuzzy_base_256_tests() {
 #[test]
 fn conversion_test() {
     assert_eq!(
-        LooseInt::<10>::from(99825).convert(),
-        LooseInt::<16>::from(99825)
+        Loose::<10>::from(99825).convert::<16, Loose<16>>(),
+        Loose::<16>::from(99825)
     );
 }
 
 #[test]
 fn conversion_test_2() {
     assert_eq!(
-        LooseInt::<10>::from(-7935368386145574994_isize).convert(),
-        LooseInt::<16>::from(-7935368386145574994_isize)
+        Loose::<10>::from(-7935368386145574994_isize).convert::<16, Loose<16>>(),
+        Loose::<16>::from(-7935368386145574994_isize)
     );
 }
 
@@ -452,8 +452,8 @@ fn conversion_test_2() {
 fn fuzzy_conversion_test_10_to_16() {
     for n in test_values!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<10>::from(n).convert(),
-            LooseInt::<16>::from(n),
+            Loose::<10>::from(n).convert::<16, Loose<16>>(),
+            Loose::<16>::from(n),
             "{n}"
         )
     }
@@ -463,8 +463,8 @@ fn fuzzy_conversion_test_10_to_16() {
 fn fuzzy_conversion_test_2_to_10() {
     for n in test_values!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<2>::from(n).convert(),
-            LooseInt::<10>::from(n),
+            Loose::<2>::from(n).convert::<10, Loose<10>>(),
+            Loose::<10>::from(n),
             "{n}"
         )
     }
@@ -474,8 +474,8 @@ fn fuzzy_conversion_test_2_to_10() {
 fn fuzzy_conversion_test_27_to_64() {
     for n in test_values!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<27>::from(n).convert(),
-            LooseInt::<64>::from(n),
+            Loose::<27>::from(n).convert::<64, Loose<64>>(),
+            Loose::<64>::from(n),
             "{n}"
         )
     }
@@ -485,8 +485,8 @@ fn fuzzy_conversion_test_27_to_64() {
 fn fuzzy_conversion_test_10_to_256() {
     for n in test_values!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<10>::from(n).convert(),
-            LooseInt::<256>::from(n),
+            Loose::<10>::from(n).convert::<256, Loose<256>>(),
+            Loose::<256>::from(n),
             "{n}"
         )
     }
@@ -496,7 +496,7 @@ fn fuzzy_conversion_test_10_to_256() {
 fn fuzzy_comparison_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         assert_eq!(
-            LooseInt::<10>::from(a).cmp(&b.into()),
+            Loose::<10>::from(a).cmp(&b.into()),
             a.cmp(&b),
             "{a} <> {b}"
         )
@@ -505,14 +505,14 @@ fn fuzzy_comparison_test() {
 
 #[test]
 fn shl() {
-    assert_eq!(LooseInt::<10>::from(15) << 1.into(), 150.into());
-    assert_eq!(LooseInt::<2>::from(41) << 1.into(), 82.into());
-    assert_eq!(LooseInt::<32>::from(7) << 3.into(), 229376.into());
+    assert_eq!(Loose::<10>::from(15) << 1.into(), 150.into());
+    assert_eq!(Loose::<2>::from(41) << 1.into(), 82.into());
+    assert_eq!(Loose::<32>::from(7) << 3.into(), 229376.into());
 }
 
 #[test]
 fn shr() {
-    assert_eq!(LooseInt::<10>::from(9100) >> 2.into(), 91.into());
-    assert_eq!(LooseInt::<2>::from(256) >> 4.into(), 16.into());
-    assert_eq!(LooseInt::<16>::from(28672) >> 3.into(), 7.into());
+    assert_eq!(Loose::<10>::from(9100) >> 2.into(), 91.into());
+    assert_eq!(Loose::<2>::from(256) >> 4.into(), 16.into());
+    assert_eq!(Loose::<16>::from(28672) >> 3.into(), 7.into());
 }

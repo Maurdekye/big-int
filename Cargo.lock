@@ -4,10 +4,19 @@ version = 3
 
 [[package]]
 name = "big-int"
-version = "2.1.4"
+version = "3.0.0"
 dependencies = [
+ "big-int-proc",
  "rand",
  "thiserror",
+]
+
+[[package]]
+name = "big-int-proc"
+version = "1.0.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -89,9 +98,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.42"
+version = "2.0.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b7d0a2c048d661a1a59fcd7355baa232f7ed34e0ee4df2eef3c1c1c0d3852d8"
+checksum = "ee659fb5f3d355364e1f3e5bc10fb82068efbf824a1e9d1c9504244a6469ad53"
 dependencies = [
  "proc-macro2",
  "quote",
