@@ -7,43 +7,40 @@ pub fn auto_big_int_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let name = &ast.ident;
 
-    let signed_int_conversions = [
-        "i128", "i64", "i32", "i16", "i8", "isize"
-    ].into_iter().map(|signed| {
-            let signed = format_ident!("{signed}");
+    let int_conversions = [(
+        "from_i128_inner",
+        "into_i128_inner",
+        "i128",
+        ["i128", "i64", "i32", "i16", "i8", "isize"],
+    ), (
+        "from_u128_inner",
+        "into_u128_inner",
+        "u128",
+        ["u128", "u64", "u32", "u16", "u8", "usize"],
+    )]
+    .into_iter()
+    .map(|(from, into, from_target_type, int_types)| {
+        int_types.map(|int| {
+            let from = format_ident!("{from}");
+            let into = format_ident!("{into}");
+            let from_target_type = format_ident!("{from_target_type}");
+            let int = format_ident!("{int}");
             quote! {
-                impl<const BASE: usize> ::std::convert::From<#signed> for #name<BASE> {
-                    fn from(value: #signed) -> Self {
-                        <#name<BASE> as ::big_int::BigInt<BASE>>::from_i128_inner(value as i128)
+                impl<const BASE: usize> ::std::convert::From<#int> for #name<BASE> {
+                    fn from(value: #int) -> Self {
+                        <#name<BASE> as ::big_int::BigInt<BASE>>::#from(value as #from_target_type)
                     }
                 }
 
-                impl<const BASE: usize> ::std::convert::From<#name<BASE>> for #signed {
+                impl<const BASE: usize> ::std::convert::From<#name<BASE>> for #int {
                     fn from(value: #name<BASE>) -> Self {
-                        <#name<BASE> as ::big_int::BigInt<BASE>>::into_i128_inner(value) as #signed
+                        <#name<BASE> as ::big_int::BigInt<BASE>>::#into(value) as #int
                     }
                 }
             }
-        });
-
-    let unsigned_int_conversions = [
-        "u128", "u64", "u32", "u16", "u8", "usize",
-    ].into_iter().map(|unsigned| {
-        let unsigned = format_ident!("{unsigned}");
-        quote! {
-            impl<const BASE: usize> ::std::convert::From<#unsigned> for #name<BASE> {
-                fn from(value: #unsigned) -> Self {
-                    <#name<BASE> as ::big_int::BigInt<BASE>>::from_u128_inner(value as u128)
-                }
-            }
-
-            impl<const BASE: usize> ::std::convert::From<#name<BASE>> for #unsigned {
-                fn from(value: #name<BASE>) -> Self {
-                    <#name<BASE> as ::big_int::BigInt<BASE>>::into_u128_inner(value) as #unsigned
-                }
-            }
-        }
-    });
+        })
+    })
+    .flatten();
 
     let gen = quote! {
         impl<const BASE: usize> ::big_int::get_back::GetBack for #name<BASE> {
@@ -198,8 +195,7 @@ pub fn auto_big_int_derive(input: TokenStream) -> TokenStream {
             }
         }
 
-        #(#signed_int_conversions)*
-        #(#unsigned_int_conversions)*
+        #(#int_conversions)*
     };
     gen.into()
 }
