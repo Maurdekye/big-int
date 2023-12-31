@@ -1,3 +1,5 @@
+//! big int errors.
+
 use thiserror::Error;
 
 /// Represents an error with regards to a big int operation.

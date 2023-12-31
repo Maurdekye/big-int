@@ -41,7 +41,7 @@ pub const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 /// let b = a * 96.into();
 /// assert_eq!(b, 56928.into());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, BigIntTraits)]
+#[derive(Debug, Clone, BigIntTraits)]
 pub struct Tight<const BASE: usize> {
     sign: Sign,
     data: VecDeque<Datum>,
@@ -55,7 +55,7 @@ impl<const BASE: usize> Tight<BASE> {
 
     /// Construct a `Tight` int directly from raw parts.
     ///
-    /// Ensure the following invariants hold true to prevent undefined behavior:
+    /// Ensure the following invariants hold true to maintain soundness:
     /// * `start_offset <= end_offset`
     /// * `end_offset <= data.len() * big_int::tight::DATUM_SIZE`
     /// * `(end_offset - start_offset) % Tight::<BASE>::BITS_PER_DIGIT == 0`
@@ -302,7 +302,7 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
     }
 }
 
-/// An iterator over the digits of a `Tight`.
+/// An iterator over the digits of a `Tight` int.
 ///
 /// ```
 /// use big_int::prelude::*;

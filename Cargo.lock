@@ -4,26 +4,16 @@ version = 3
 
 [[package]]
 name = "big-int"
-version = "3.1.0"
+version = "3.1.1"
 dependencies = [
- "big-int-proc 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "big-int-proc",
  "rand",
  "thiserror",
 ]
 
 [[package]]
 name = "big-int-proc"
-version = "1.0.0"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
-name = "big-int-proc"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7c819e7df53c900d497252babd3e7e1a6a39c85c01a9cb10788539a890fb0e5"
+version = "1.1.0"
 dependencies = [
  "quote",
  "syn",

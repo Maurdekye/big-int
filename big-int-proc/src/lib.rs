@@ -73,10 +73,18 @@ pub fn auto_big_int_derive(input: TokenStream) -> TokenStream {
         }
 
         impl<const BASE: usize> ::std::cmp::Ord for #name<BASE> {
-            fn cmp(&self, other: &Self) ->::std::cmp::Ordering {
+            fn cmp(&self, other: &Self) -> ::std::cmp::Ordering {
                 <#name<BASE> as ::big_int::BigInt<BASE>>::cmp_inner(self, other)
             }
         }
+
+        impl<const BASE: usize> ::std::cmp::PartialEq for #name<BASE> {
+            fn eq(&self, other: &Self) -> bool {
+                <#name<BASE> as ::big_int::BigInt<BASE>>::eq_inner(self, other)
+            }
+        }
+
+        impl<const BASE: usize> ::std::cmp::Eq for #name<BASE> {}
 
         impl<const BASE: usize> ::std::ops::Neg for #name<BASE> {
             type Output = Self;

@@ -22,7 +22,7 @@ use std::{collections::VecDeque, vec};
 /// Supports any base from 2-u64::MAX. 
 /// 
 /// Each digit requires 8 bytes of storage, making this a somewhat space-inefficient 
-/// implementation. however, the lack of additional complexity improves runtime efficiency on the
+/// implementation. however, the lack of additional complexity improves runtime efficiency over the
 /// tightly-packed implementation.
 /// 
 /// ```
@@ -32,7 +32,7 @@ use std::{collections::VecDeque, vec};
 /// let b = a * 96.into();
 /// assert_eq!(b, 56928.into());
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq, BigIntTraits)]
+#[derive(Clone, Debug, BigIntTraits)]
 pub struct Loose<const BASE: usize> {
     sign: Sign,
     digits: Vec<Digit>,
@@ -143,7 +143,7 @@ impl<const BASE: usize> BigInt<BASE> for Loose<BASE> {
     }
 }
 
-/// An iterator over the digits of a `Loose`.
+/// An iterator over the digits of a `Loose` int.
 /// 
 /// ```
 /// use big_int::prelude::*;

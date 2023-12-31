@@ -1,3 +1,5 @@
+//! Safely retrieve items from a collection with negative indexing.
+ 
 /// Safely retrieve items from a collection with negative indexing.
 pub trait GetBack {
   type Item;

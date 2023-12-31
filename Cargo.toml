@@ -1,7 +1,7 @@
 workspace = { members = ["big-int-proc"] }
 [package]
 name = "big-int"
-version = "3.1.0"
+version = "3.1.1"
 edition = "2021"
 author = "Maurdekye"
 description = "Simple library for arbitrary-precision, arbitrary-base arithmetic, supporting arbitrarily large integers of any base from 2 to u64::MAX."
@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-big-int-proc = "1.0.0"
+big-int-proc = { version = "1.1.0", path = "big-int-proc" }
 thiserror = "1.0.51"
 
 [dev-dependencies]
