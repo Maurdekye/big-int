@@ -382,14 +382,20 @@ where
         self.set_sign(Positive);
         rhs.set_sign(Positive);
         let mut result = Self::zero();
-        for i in 1.. {
-            if let Some(digit) = self.get_back(i) {
-                for _ in 0..digit {
-                    result += rhs.clone();
+        let mut addend = rhs.clone();
+        let mut addends = Vec::new();
+        let mut power = 1;
+        while power < BASE {
+            addends.push(addend.clone());
+            addend += addend.clone();
+            power <<= 1;
+        }
+        for digit in self.iter().rev() {
+            for i in 0..addends.len() {
+                if digit & (1 << i) != 0 {
+                    result += addends[i].clone();
                 }
-                rhs.shl_assign_inner(1);
-            } else {
-                break;
+                addends[i].shl_assign_inner(1);
             }
         }
         result.with_sign(sign).normalized()
@@ -542,9 +548,20 @@ where
     /// ```
     fn zero() -> Self;
 
-    /// The sign of the big int.
+    /// Check if the big int is zero.
+    /// 
+    /// ```
+    /// use big_int::prelude::*;
     ///
-    /// The value zero represented as a big int.
+    /// let a: Tight<10> = 13.into();
+    /// let b = 13.into();
+    /// assert!((a - b).is_zero());
+    /// ```
+    fn is_zero(&self) -> bool {
+        self.iter().all(|digit| digit == 0)
+    }
+
+    /// The sign of the big int.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -556,7 +573,7 @@ where
     /// ```
     fn sign(&self) -> Sign;
 
-    /// The big in with the given sign.
+    /// The big int with the given sign.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -588,9 +605,9 @@ where
     /// ```
     fn push_back(&mut self, digit: Digit);
 
-    /// Append a digit to the left side of the int. May cause the resulting
-    /// int to be denormalized; make sure to call .normalize() afterwards
-    /// to prevent undefined functionality.
+    /// Append a digit to the left side of the int. If a zero is pushed onto the end, 
+    /// of the int, it will become denormalized; make sure to call .normalize() before performing
+    /// additional operations to prevent undefined functionality.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -819,20 +836,20 @@ where
     /// let b = 56_789.into();
     /// assert_eq!(a.div_rem(b), Ok((17_609.into(), 2_498.into())));
     /// ```
-    fn div_rem(mut self, mut other: Self) -> Result<(Self, Self), BigIntError> {
-        if other.clone().normalized() == Self::zero() {
+    fn div_rem(mut self, mut rhs: Self) -> Result<(Self, Self), BigIntError> {
+        if rhs.clone().normalized() == Self::zero() {
             return Err(BigIntError::DivisionByZero);
         }
-        if other.len() > self.len() {
+        if rhs.len() > self.len() {
             return Ok((Self::zero(), self));
         }
-        let sign = self.sign() * other.sign();
+        let sign = self.sign() * rhs.sign();
         self.set_sign(Positive);
-        other.set_sign(Positive);
-        let quot_digits = self.len() - other.len() + 1;
+        rhs.set_sign(Positive);
+        let quot_digits = self.len() - rhs.len() + 1;
         let mut quot = Self::Builder::new();
         let mut prod = Self::zero();
-        let mut addend = other.clone().shl_inner(quot_digits - 1);
+        let mut addend = rhs.clone().shl_inner(quot_digits - 1);
         let mut addends = Vec::new();
         let mut power = 1;
         while power < BASE {
@@ -900,18 +917,20 @@ where
     /// assert!(a.cmp_magnitude(&b).is_gt());
     /// ```
     fn cmp_magnitude(&self, rhs: &Self) -> Ordering {
-        match self.len().cmp(&rhs.len()) {
-            Ordering::Equal => {
-                for (self_digit, rhs_digit) in self.iter().zip(rhs.iter()) {
-                    match self_digit.cmp(&rhs_digit) {
-                        Ordering::Equal => {}
-                        ordering => return ordering,
-                    }
-                }
-                Ordering::Equal
+        for i in (1..=self.len().max(rhs.len())).rev() {
+            match (self.get_back(i), rhs.get_back(i)) {
+                (Some(1..), None) => return Ordering::Greater,
+                (None, Some(1..)) => return Ordering::Less,
+                (self_digit, rhs_digit) => match self_digit
+                    .unwrap_or_default()
+                    .cmp(&rhs_digit.unwrap_or_default())
+                {
+                    Ordering::Equal => {}
+                    ordering => return ordering,
+                },
             }
-            order => order,
         }
+        Ordering::Equal
     }
 }
 
