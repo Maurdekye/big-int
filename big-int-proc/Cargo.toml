@@ -2,6 +2,9 @@
 name = "big-int-proc"
 version = "1.0.0"
 edition = "2021"
+author = "Maurdekye"
+description = "Proc macros for `big-int`."
+license = "MIT"
 
 [lib]
 proc-macro = true
