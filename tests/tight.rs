@@ -59,25 +59,19 @@ fn from_primitive() {
 #[test]
 fn normalized() {
     assert_eq!(
-        vec![0, 0, 0, 0]
-            .into_iter()
-            .collect::<Tight<10>>()
-            .normalized(),
+        unsafe { Tight::<10>::from_raw_parts(vec![0, 0, 0, 0].into(), 16, 32) }.normalized(),
         0.into()
     );
     assert_eq!(
-        (-vec![0, 0].into_iter().collect::<Tight<10>>()).normalized(),
+        (-unsafe { Tight::<10>::from_raw_parts(vec![0, 0].into(), 4, 12) }).normalized(),
         0.into()
     );
     assert_eq!(
-        vec![].into_iter().collect::<Tight<10>>().normalized(),
+        unsafe { Tight::<10>::from_raw_parts(vec![].into(), 0, 0) }.normalized(),
         0.into()
     );
     assert_eq!(
-        vec![0, 0, 8, 3]
-            .into_iter()
-            .collect::<Tight<10>>()
-            .normalized(),
+        unsafe { Tight::<10>::from_raw_parts(vec![0b0000_0000, 0b1000_0011].into(), 8, 16) }.normalized(),
         83.into()
     );
 }
@@ -125,6 +119,14 @@ fn addition_4() {
     let b = 108.into();
     a += b;
     assert_eq!(a, 109.into());
+}
+
+#[test]
+fn addition_5() {
+    let mut a: Tight<10> = (-5).into();
+    let b = 0.into();
+    a.add_assign_inner(b);
+    assert_eq!(a, (-5).into());
 }
 
 #[test]

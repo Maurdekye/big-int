@@ -59,7 +59,6 @@ pub mod prelude {
     pub use crate::*;
 }
 
-
 pub(crate) mod test_utils;
 
 pub mod get_back;
@@ -92,6 +91,15 @@ macro_rules! mask {
 /// Supports basic arithmetic operations, as well as all utilities necessary for
 /// coercing to and from various builtin types, such as primitive int types, `Vec`s, and `String`s.
 ///
+/// ### For implementors: 
+/// If implementing this trait for your own type, don't be alarmed by the massive list of `Self`
+/// constraints. Use the included derive macro `big_int::BigIntTraits` to automatically derive
+/// all traits using default `*_inner` implementations pre-provided by `BigInt`.
+/// 
+/// At least one of `normalize` or `normalized` must be defined to prevent recursion.\
+/// At least one of `shl_inner` or `shl_assign_inner` must be defined to prevent recursion.\
+/// At least one of `shr_inner` or `shr_assign_inner` must be defined to prevent recursion.\
+/// 
 /// ```
 /// use big_int::prelude::*;
 ///
@@ -139,8 +147,8 @@ where
         + From<i16>
         + From<i32>
         + From<i64>
-        + From<isize>
         + From<i128>
+        + From<isize>
         + Into<u8>
         + Into<u16>
         + Into<u32>
@@ -151,31 +159,33 @@ where
         + Into<i16>
         + Into<i32>
         + Into<i64>
-        + Into<isize>
         + Into<i128>
+        + Into<isize>
 {
     type Builder: BigIntBuilder<{ BASE }> + Build<Self>;
     type DigitIterator<'a>: DoubleEndedIterator<Item = Digit>
     where
         Self: 'a;
 
-    /// Implements the `GetBack` trait.
+    /// Default implementation of `big_int::GetBack`. 
     /// 
-    /// ```rs
-    /// use big_int::prelude::*;
-    /// 
-    /// 
-    /// ```
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn get_back_inner(&self, index: usize) -> Option<Digit> {
         self.len()
             .checked_sub(index)
             .and_then(|index| self.get_digit(index))
     }
 
+    /// Default implementation of `Default`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn default_inner() -> Self {
         Self::zero()
     }
 
+    /// Default implementation of `Display`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn fmt_inner(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -185,10 +195,16 @@ where
         )
     }
 
+    /// Default implementation of `PartialOrd`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn partial_cmp_inner(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 
+    /// Default implementation of `Ord`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn cmp_inner(&self, other: &Self) -> Ordering {
         match (self.sign(), other.sign()) {
             (Positive, Negative) => Ordering::Greater,
@@ -198,12 +214,17 @@ where
         }
     }
 
+    /// Default implementation of `Neg`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn neg_inner(self) -> Self {
-        let sign = -self.sign();
-        self.with_sign(sign)
+        let sign = self.sign();
+        self.with_sign(-sign)
     }
 
-
+    /// Default implementation of `Add`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn add_inner(self, rhs: Self) -> Self {
         if self.sign() != rhs.sign() {
             self - (-rhs)
@@ -232,9 +253,12 @@ where
         }
     }
 
+    /// Default implementation of `AddAssign`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn add_assign_inner(&mut self, rhs: Self) {
         if self.sign() != rhs.sign() {
-            *self -= -rhs;
+            self.sub_assign_inner(rhs.neg_inner());
         } else {
             let self_len = self.len();
             let mut carry = 0;
@@ -263,11 +287,14 @@ where
         }
     }
 
+    /// Default implementation of `Sub`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn sub_inner(mut self, rhs: Self) -> Self {
         if self.sign() != rhs.sign() {
-            self + (-rhs)
+            self.add_inner(rhs.neg_inner())
         } else if rhs.cmp_magnitude(&self).is_gt() {
-            -(rhs - self)
+            rhs.sub_inner(self).neg_inner()
         } else {
             let sign = self.sign();
             let mut result = Self::Builder::new();
@@ -301,12 +328,15 @@ where
         }
     }    
     
+    /// Default implementation of `SubAssign`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn sub_assign_inner(&mut self, mut rhs: Self) {
         if self.sign() != rhs.sign() {
-            *self += -rhs;
+            self.add_assign_inner(rhs.neg_inner());
         } else if rhs.cmp_magnitude(self).is_gt() {
-            rhs -= self.clone();
-            *self = -rhs;
+            rhs.sub_assign_inner(self.clone());
+            *self = rhs.neg_inner();
         } else {
             let self_len = self.len();
             for i in 1.. {
@@ -344,6 +374,9 @@ where
         self.normalize();
     }
 
+    /// Default implementation of `Mul`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn mul_inner(mut self, mut rhs: Self) -> Self {
         let sign = self.sign() * rhs.sign();
         self.set_sign(Positive);
@@ -362,23 +395,38 @@ where
         result.with_sign(sign).normalized()
     }
 
+    /// Default implementation of `MulAssign`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn mul_assign_inner(&mut self, rhs: Self) {
         *self = self.clone() * rhs;
     }
 
+    /// Default implementation of `Div`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn div_inner(self, rhs: Self) -> Self {
         self.div_rem(rhs).unwrap().0
     }
 
+    /// Default implementation of `DivAssign`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn div_assign_inner(&mut self, rhs: Self) {
         *self = self.clone() / rhs;
     }
 
+    /// Default implementation of `FromStr`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn from_str_inner(s: &str) -> Result<Self, BigIntError> {
         Self::parse(s, STANDARD_ALPHABET)
             .map_err(BigIntError::ParseFailed)
     }
 
+    /// Default implementation of `FromIterator`. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn from_iter_inner<T: IntoIterator<Item = Digit>>(iter: T) -> Self {
         let mut builder = Self::Builder::new();
         for digit in iter {
@@ -387,6 +435,9 @@ where
         builder.build()
     }
 
+    /// Default implementation of `From<_>` for all unsigned primitive int types. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn from_u128_inner(mut value: u128) -> Self {
         let base = BASE as u128;
         let mut result = Self::Builder::new();
@@ -399,6 +450,9 @@ where
         result.build()
     }
 
+    /// Default implementation of `From<_>` for all signed primitive int types. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn from_i128_inner(value: i128) -> Self {
         if value < 0 {
             Self::from_u128_inner((-value) as u128).with_sign(Negative)
@@ -407,6 +461,9 @@ where
         }
     }
 
+    /// Default implementation of `Into<_>` for all unsigned primitive int types. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn into_u128_inner(self) -> u128 {
         if self.sign() == Negative {
             panic!("uint conversion with underflow");
@@ -420,6 +477,9 @@ where
         total
     }
 
+    /// Default implementation of `Into<_>` for all signed primitive int types. 
+    /// 
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn into_i128_inner(self) -> i128 {
         let mut total: i128 = 0;
         let mut place: i128 = 0;
@@ -545,7 +605,11 @@ where
     ///
     /// Note: works in powers of BASE, not in powers of 2.
     ///
-    /// Defined in terms of `shr_assign`; at least one of `shr` or `shr_assign` must be defined.
+    /// Defined in terms of `shr_assign`; at least one of `shr` 
+    /// or `shr_assign` must be defined by implementers.
+    /// 
+    /// Also acts as the default implementation of the `Shr` trait, 
+    /// as provided automatically by `big_int_proc::BigIntTraits`.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -562,7 +626,11 @@ where
     ///
     /// Note: works in powers of BASE, not in powers of 2.
     ///
-    /// Defined in terms of `shr`; at least one of `shr` or `shr_assign` must be defined.
+    /// Defined in terms of `shr`; at least one of `shr` 
+    /// or `shr_assign` must be defined by implementers.
+    /// 
+    /// Also acts as the default implementation of the `ShrAssign` trait, 
+    /// as provided automatically by `big_int_proc::BigIntTraits`.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -579,7 +647,11 @@ where
     ///
     /// Note: works in powers of BASE, not in powers of 2.
     ///
-    /// Defined in terms of `shl_assign`; at least one of `shl` or `shl_assign` must be defined.
+    /// Defined in terms of `shl_assign`; at least one of `shl`
+    ///  or `shl_assign` must be defined by implementers.
+    /// 
+    /// Also acts as the default implementation of the `Shl` trait, 
+    /// as provided automatically by `big_int_proc::BigIntTraits`.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -596,7 +668,11 @@ where
     ///
     /// Note: works in powers of BASE, not in powers of 2.
     ///
-    /// Defined in terms of `shl`; at least one of `shl` or `shl_assign` must be defined.
+    /// Defined in terms of `shl`; at least one of `shl`
+    ///  or `shl_assign` must be defined by implementers.
+    /// 
+    /// Also acts as the default implementation of the `ShlAssign` trait, 
+    /// as provided automatically by `big_int_proc::BigIntTraits`.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -611,7 +687,7 @@ where
 
     /// Iterate over the digits of the int.
     ///
-    /// `impl`s `DoubleEndedIterator`, so digits can be iterated over forward or in reverse.
+    /// implements `DoubleEndedIterator`, so digits can be iterated over forward or in reverse.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -630,7 +706,7 @@ where
     /// when normalized.
     ///
     /// Defined in terms of `normalize`; at least one of `normalize` or `normalized`
-    /// must be defined.
+    /// must be defined by the implementer.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -651,7 +727,7 @@ where
     /// when normalized.
     ///
     /// Defined in terms of `normalized`; at least one of `normalize` or `normalized`
-    /// must be defined.
+    /// must be defined by the implementer.
     ///
     /// ```
     /// use big_int::prelude::*;

@@ -1,19 +1,19 @@
 //! tightly packed big int implementation, for better memory efficiency.
-//! 
+//!
 //! ```
 //! use big_int::prelude::*;
-//! 
+//!
 //! let mut a: Tight<10> = 13.into();
 //! a *= 500.into();
 //! assert_eq!(a, 6500.into());
-//! 
+//!
 //! a.shr_assign_inner(2);
 //! a += 17.into();
 //! assert_eq!(a, 82.into());
 //! ```
 
-use std::collections::VecDeque;
 use big_int_proc::BigIntTraits;
+use std::collections::VecDeque;
 
 use crate::prelude::*;
 
@@ -21,10 +21,10 @@ use crate::prelude::*;
 /// The size of this value has no impact on the size of individual
 /// digits that the number can represent; it only impacts memory and
 /// runtime performance. Could be any unsigned type from u8-u128.
-type Datum = u8;
+pub type Datum = u8;
 
 /// Size of the chosen datum unit, in bits.
-const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
+pub const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 
 /// A tightly-packed arbitrary base big int implementation.
 /// Supports any base from 2-u64::MAX.
@@ -53,7 +53,54 @@ impl<const BASE: usize> Tight<BASE> {
     /// Number of bits required to store a single digit in the chosen `BASE`.
     const BITS_PER_DIGIT: usize = bits_per_digit(BASE);
 
-    fn aligned(mut self) -> Self {
+    /// Construct a `Tight` int directly from raw parts.
+    ///
+    /// Ensure the following invariants hold true to prevent undefined behavior:
+    /// * `start_offset <= end_offset`
+    /// * `end_offset <= data.len() * big_int::tight::DATUM_SIZE`
+    /// * `(end_offset - start_offset) % Tight::<BASE>::BITS_PER_DIGIT == 0`
+    /// 
+    /// ```
+    /// use big_int::prelude::*;
+    /// 
+    /// let a: Tight<10> = unsafe { Tight::from_raw_parts(
+    ///     vec![0b0001_1001, 0b0101_0000].into(),
+    ///     0, 16
+    /// ) };
+    /// 
+    /// assert_eq!(a, 1950.into());
+    /// ```
+    pub unsafe fn from_raw_parts(
+        data: VecDeque<Datum>,
+        start_offset: usize,
+        end_offset: usize,
+    ) -> Self {
+        Self {
+            sign: Positive,
+            data,
+            start_offset,
+            end_offset,
+        }
+    }
+
+    /// Return the int with the bits within aligned to the beginning of the data segment
+    /// and unnecessary extra data truncated.
+    /// 
+    /// It's likely unnecessary to invoke this directly unless using `Tight::from_raw_parts`.
+    /// 
+    /// ```
+    /// use big_int::prelude::*;
+    /// 
+    /// let mut a: Tight<10> = unsafe { Tight::from_raw_parts(
+    ///     vec![0b0000_0000, 0b0000_1001, 0b0101_0000, 0b0000_0000].into(),
+    ///     12, 20
+    /// ) };
+    /// assert_eq!(a.aligned(), unsafe { Tight::from_raw_parts(
+    ///     vec![0b1001_0101].into(),
+    ///     0, 8
+    /// ) });
+    /// ```
+    pub fn aligned(mut self) -> Self {
         let empty_cells = self.start_offset / DATUM_SIZE;
         self.start_offset -= empty_cells * DATUM_SIZE;
         self.end_offset -= empty_cells * DATUM_SIZE;
