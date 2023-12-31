@@ -32,6 +32,8 @@
 //! division, and left/right shifting. Notably, shifting acts on the `BASE` of the associated number, increasing
 //! or decreasing the magnitude by powers of `BASE` as opposed to powers of 2.
 
+extern crate self as big_int;
+
 use std::{
     cmp::Ordering,
     fmt::Display,
@@ -55,10 +57,10 @@ pub mod prelude {
     pub use crate::*;
 }
 
-pub mod get_back;
 
 pub(crate) mod test_utils;
 
+pub mod get_back;
 pub mod base64;
 pub mod error;
 pub mod loose;
@@ -155,6 +157,13 @@ where
     where
         Self: 'a;
 
+    /// Implements the `GetBack` trait.
+    /// 
+    /// ```rs
+    /// use big_int::prelude::*;
+    /// 
+    /// 
+    /// ```
     fn get_back_inner(&self, index: usize) -> Option<Digit> {
         self.len()
             .checked_sub(index)
@@ -597,8 +606,6 @@ where
     fn shl_assign_inner(&mut self, amount: usize) {
         *self = self.clone().shl_inner(amount);
     }
-
-
 
     /// Iterate over the digits of the int.
     ///
