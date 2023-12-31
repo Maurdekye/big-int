@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::*;
 
-#[proc_macro_derive(BigInt)]
+#[proc_macro_derive(BigIntTraits)]
 pub fn auto_big_int_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let name = &ast.ident;

@@ -13,7 +13,7 @@
 //! ```
 
 
-use big_int_proc::BigInt;
+use big_int_proc::BigIntTraits;
 
 use crate::prelude::*;
 use std::{collections::VecDeque, vec};
@@ -32,7 +32,7 @@ use std::{collections::VecDeque, vec};
 /// let b = a * 96.into();
 /// assert_eq!(b, 56928.into());
 /// ```
-#[derive(Clone, Debug, PartialEq, Eq, BigInt)]
+#[derive(Clone, Debug, PartialEq, Eq, BigIntTraits)]
 pub struct Loose<const BASE: usize> {
     sign: Sign,
     digits: Vec<Digit>,

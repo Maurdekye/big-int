@@ -13,7 +13,7 @@
 //! ```
 
 use std::collections::VecDeque;
-use big_int_proc::BigInt;
+use big_int_proc::BigIntTraits;
 
 use crate::prelude::*;
 
@@ -41,7 +41,7 @@ const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 /// let b = a * 96.into();
 /// assert_eq!(b, 56928.into());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, BigInt)]
+#[derive(Debug, Clone, PartialEq, Eq, BigIntTraits)]
 pub struct Tight<const BASE: usize> {
     sign: Sign,
     data: VecDeque<Datum>,
