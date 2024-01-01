@@ -61,9 +61,10 @@ impl<const BASE: usize> Loose<BASE> {
     }
 }
 
+
+
 impl<const BASE: usize> BigInt<BASE> for Loose<BASE> {
     type Builder = LooseBuilder<{ BASE }>;
-    type DigitIterator<'a> = LooseIter<'a, BASE>;
 
     fn len(&self) -> usize {
         self.digits.len()
@@ -134,56 +135,12 @@ impl<const BASE: usize> BigInt<BASE> for Loose<BASE> {
         self.digits.extend(vec![0; amount]);
     }
 
-    fn iter<'a>(&'a self) -> Self::DigitIterator<'a> {
-        LooseIter {
-            index: 0,
-            back_index: self.len(),
-            int: self,
-        }
+    fn pop_back(&mut self) -> Option<Digit> {
+        self.digits.pop()
     }
-}
 
-/// An iterator over the digits of a `Loose` int.
-/// 
-/// ```
-/// use big_int::prelude::*;
-/// use std::iter::Rev;
-/// 
-/// let a: Loose<10> = 12345.into();
-/// let it: LooseIter<10> = a.iter();
-/// let rev_it: Rev<LooseIter<10>> = a.iter().rev();
-/// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
-/// assert_eq!(rev_it.collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
-/// ```
-pub struct LooseIter<'a, const BASE: usize> {
-    index: usize,
-    back_index: usize,
-    int: &'a Loose<BASE>,
-}
-
-impl<const BASE: usize> Iterator for LooseIter<'_, BASE> {
-    type Item = Digit;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        (self.index < self.back_index)
-            .then_some(&mut self.index)
-            .and_then(|index| {
-                *index += 1;
-                self.int.digits.get(*index - 1)
-            })
-            .copied()
-    }
-}
-
-impl<const BASE: usize> DoubleEndedIterator for LooseIter<'_, BASE> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        (self.back_index > self.index)
-            .then_some(&mut self.back_index)
-            .and_then(|index| {
-                *index -= 1;
-                self.int.digits.get(*index)
-            })
-            .copied()
+    fn pop_front(&mut self) -> Option<Digit> {
+        (!self.digits.is_empty()).then(|| self.digits.remove(0))
     }
 }
 

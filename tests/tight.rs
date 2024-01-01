@@ -3,7 +3,6 @@ use big_int::{
     prelude::*,
     test_pairs, test_values,
 };
-use rand::prelude::*;
 use std::str::FromStr;
 
 #[test]
@@ -71,7 +70,8 @@ fn normalized() {
         0.into()
     );
     assert_eq!(
-        unsafe { Tight::<10>::from_raw_parts(vec![0b0000_0000, 0b1000_0011].into(), 8, 16) }.normalized(),
+        unsafe { Tight::<10>::from_raw_parts(vec![0b0000_0000, 0b1000_0011].into(), 8, 16) }
+            .normalized(),
         83.into()
     );
 }
@@ -124,7 +124,7 @@ fn addition_4() {
 #[test]
 fn addition_5() {
     let mut a: Tight<10> = (-5).into();
-    let b = 0.into();
+    let b: Tight<10> = 0.into();
     a.add_assign_inner(b);
     assert_eq!(a, (-5).into());
 }
@@ -264,22 +264,28 @@ fn fuzzy_multiplication_test() {
 #[test]
 fn division() {
     let a: Tight<10> = 999_999_999.into();
-    let b = 56_789.into();
-    assert_eq!(a.div_rem(b), Ok((17_609.into(), 2_498.into())));
+    let b: Tight<10> = 56_789.into();
+    assert_eq!(
+        a.div_rem::<_, Tight<10>>(b),
+        Ok((17_609.into(), 2_498.into()))
+    );
 }
 
 #[test]
 fn division_2() {
     let a: Tight<10> = (-25106).into();
-    let b = 6331.into();
-    assert_eq!(a.div_rem(b), Ok(((-3).into(), (-6113).into())));
+    let b: Tight<10> = 6331.into();
+    assert_eq!(
+        a.div_rem::<_, Tight<10>>(b),
+        Ok(((-3).into(), (-6113).into()))
+    );
 }
 
 #[test]
 fn division_3() {
     let a: Tight<10> = (-27792).into();
-    let b = 6.into();
-    assert_eq!(a.div_rem(b), Ok(((-4632).into(), 0.into())));
+    let b: Tight<10> = 6.into();
+    assert_eq!(a.div_rem::<_, Tight<10>>(b), Ok(((-4632).into(), 0.into())));
 }
 
 #[test]
@@ -288,7 +294,7 @@ fn division_5() {
     let b = 16;
     assert_eq!(
         Ok((Tight::<10>::from(a / b), (a % b).into())),
-        Tight::from(a).div_rem(b.into())
+        Tight::from(a).div_rem::<Tight<10>, Tight<10>>(b.into())
     );
 }
 
@@ -298,7 +304,7 @@ fn division_6() {
     let b = 2;
     assert_eq!(
         Ok((Tight::<10>::from(a / b), (a % b).into())),
-        Tight::from(a).div_rem(b.into())
+        Tight::from(a).div_rem::<Tight<10>, Tight<10>>(b.into())
     );
 }
 
@@ -308,15 +314,18 @@ fn division_7() {
     let b = 79;
     assert_eq!(
         Ok((Tight::<256>::from(a / b), (a % b).into())),
-        Tight::from(a).div_rem(b.into())
+        Tight::from(a).div_rem::<Tight<256>, Tight<256>>(b.into())
     );
 }
 
 #[test]
 fn division_by_zero() {
     let a: Tight<10> = 999_999_999.into();
-    let b = 0.into();
-    assert_eq!(a.div_rem(b), Err(BigIntError::DivisionByZero));
+    let b: Tight<10> = 0.into();
+    assert_eq!(
+        a.div_rem::<Tight<10>, Tight<10>>(b),
+        Err(BigIntError::DivisionByZero)
+    );
 }
 
 #[test]
@@ -324,7 +333,7 @@ fn fuzzy_div_rem_2_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         if b > 0 {
             assert_eq!(
-                Tight::<10>::from(a).div_rem(b.into()),
+                Tight::<10>::from(a).div_rem::<Tight<10>, Tight<10>>(b.into()),
                 Ok(((a / b).into(), (a % b).into())),
                 "{a} / {b}"
             );
@@ -337,7 +346,7 @@ fn fuzzy_base_256_div_rem_2_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         if b > 0 {
             assert_eq!(
-                Tight::<256>::from(a).div_rem(b.into()),
+                Tight::<256>::from(a).div_rem::<Tight<256>, Tight<256>>(b.into()),
                 Ok(((a / b).into(), (a % b).into())),
                 "{a} / {b}"
             );
@@ -456,7 +465,11 @@ fn fuzzy_conversion_test_10_to_256() {
 #[test]
 fn fuzzy_comparison_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
-        assert_eq!(Tight::<10>::from(a).cmp(&b.into()), a.cmp(&b), "{a} <> {b}")
+        assert_eq!(
+            Tight::<10>::from(a).cmp_inner::<Tight<10>>(&b.into()),
+            a.cmp(&b),
+            "{a} <> {b}"
+        )
     }
 }
 

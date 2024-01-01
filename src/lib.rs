@@ -59,6 +59,8 @@ pub mod prelude {
     pub use crate::*;
 }
 
+mod tests;
+
 pub(crate) mod test_utils;
 
 pub mod base64;
@@ -136,6 +138,8 @@ where
         + ShrAssign
         + FromStr<Err = BigIntError>
         + FromIterator<Digit>
+        + Iterator<Item = Digit>
+        + DoubleEndedIterator<Item = Digit>
         + From<Vec<Digit>>
         + From<u8>
         + From<u16>
@@ -163,9 +167,6 @@ where
         + Into<isize>,
 {
     type Builder: BigIntBuilder<{ BASE }> + Build<Self>;
-    type DigitIterator<'a>: DoubleEndedIterator<Item = Digit>
-    where
-        Self: 'a;
 
     /// Default implementation of `big_int::GetBack`.
     ///
@@ -198,14 +199,14 @@ where
     /// Default implementation of `PartialOrd`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn partial_cmp_inner(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+    fn partial_cmp_inner<RHS: BigInt<{ BASE }>>(&self, other: &RHS) -> Option<Ordering> {
+        Some(self.cmp_inner(other))
     }
 
     /// Default implementation of `Ord`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn cmp_inner(&self, other: &Self) -> Ordering {
+    fn cmp_inner<RHS: BigInt<{ BASE }>>(&self, other: &RHS) -> Ordering {
         if self.is_zero() && other.is_zero() {
             Ordering::Equal
         } else {
@@ -221,7 +222,7 @@ where
     /// Default implementation of `PartialEq`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn eq_inner(&self, other: &Self) -> bool {
+    fn eq_inner<RHS: BigInt<{ BASE }>>(&self, other: &RHS) -> bool {
         matches!(self.cmp_inner(other), Ordering::Equal)
     }
 
@@ -236,13 +237,13 @@ where
     /// Default implementation of `Add`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn add_inner(self, rhs: Self) -> Self {
+    fn add_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT {
         if self.sign() != rhs.sign() {
-            self - (-rhs)
+            self.sub_inner(rhs.neg())
         } else {
             let sign = self.sign();
             let mut carry = 0;
-            let mut result = Self::Builder::new();
+            let mut result = OUT::Builder::new();
             for i in 1.. {
                 match (self.get_back(i), rhs.get_back(i), carry) {
                     (None, None, 0) => break,
@@ -267,7 +268,7 @@ where
     /// Default implementation of `AddAssign`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn add_assign_inner(&mut self, rhs: Self) {
+    fn add_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
         if self.sign() != rhs.sign() {
             self.sub_assign_inner(rhs.neg_inner());
         } else {
@@ -301,14 +302,14 @@ where
     /// Default implementation of `Sub`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn sub_inner(mut self, rhs: Self) -> Self {
+    fn sub_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(mut self, rhs: RHS) -> OUT {
         if self.sign() != rhs.sign() {
             self.add_inner(rhs.neg_inner())
         } else if rhs.cmp_magnitude(&self).is_gt() {
-            rhs.sub_inner(self).neg_inner()
+            rhs.sub_inner::<_, OUT>(self).neg_inner()
         } else {
             let sign = self.sign();
-            let mut result = Self::Builder::new();
+            let mut result = OUT::Builder::new();
             let self_len = self.len();
             for i in 1.. {
                 match (self.get_back(i), rhs.get_back(i)) {
@@ -342,12 +343,11 @@ where
     /// Default implementation of `SubAssign`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn sub_assign_inner(&mut self, mut rhs: Self) {
+    fn sub_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
         if self.sign() != rhs.sign() {
             self.add_assign_inner(rhs.neg_inner());
         } else if rhs.cmp_magnitude(self).is_gt() {
-            rhs.sub_assign_inner(self.clone());
-            *self = rhs.neg_inner();
+            *self = rhs.sub_inner::<_, Self>(self.clone()).neg_inner();
         } else {
             let self_len = self.len();
             for i in 1.. {
@@ -388,11 +388,11 @@ where
     /// Default implementation of `Mul`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn mul_inner(mut self, mut rhs: Self) -> Self {
+    fn mul_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(mut self, mut rhs: RHS) -> OUT {
         let sign = self.sign() * rhs.sign();
         self.set_sign(Positive);
         rhs.set_sign(Positive);
-        let mut result = Self::zero();
+        let mut result = OUT::zero();
         let mut addend = rhs.clone();
         let mut addends = Vec::new();
         let mut power = 1;
@@ -401,10 +401,10 @@ where
             addend += addend.clone();
             power <<= 1;
         }
-        for digit in self.iter().rev() {
+        for digit in self.rev() {
             for i in 0..addends.len() {
                 if digit & (1 << i) != 0 {
-                    result += addends[i].clone();
+                    result.add_assign_inner(addends[i].clone());
                 }
                 addends[i].shl_assign_inner(1);
             }
@@ -415,22 +415,22 @@ where
     /// Default implementation of `MulAssign`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn mul_assign_inner(&mut self, rhs: Self) {
-        *self = self.clone() * rhs;
+    fn mul_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+        *self = self.clone().mul_inner(rhs);
     }
 
     /// Default implementation of `Div`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn div_inner(self, rhs: Self) -> Self {
+    fn div_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT {
         self.div_rem(rhs).unwrap().0
     }
 
     /// Default implementation of `DivAssign`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn div_assign_inner(&mut self, rhs: Self) {
-        *self = self.clone() / rhs;
+    fn div_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+        *self = self.clone().div_rem(rhs).unwrap().0;
     }
 
     /// Default implementation of `FromStr`.
@@ -449,6 +449,20 @@ where
             builder.push_back(digit);
         }
         builder.build()
+    }
+
+    /// Default implementation of `Iterator`.
+    ///
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
+    fn next_inner(&mut self) -> Option<Digit> {
+        self.pop_front()
+    }
+
+    /// Default implementation of `DoubleEndedIterator`.
+    ///
+    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
+    fn next_back_inner(&mut self) -> Option<Digit> {
+        self.pop_back()
     }
 
     /// Default implementation of `From<_>` for all unsigned primitive int types.
@@ -484,13 +498,7 @@ where
         if self.sign() == Negative {
             panic!("uint conversion with underflow");
         }
-        let mut total: u128 = 0;
-        let mut place: u128 = 0;
-        for digit in self.iter().rev() {
-            place = if place == 0 { 1 } else { place * BASE as u128 };
-            total += (digit as u128) * place;
-        }
-        total
+        self.into_i128_inner() as u128
     }
 
     /// Default implementation of `Into<_>` for all signed primitive int types.
@@ -499,11 +507,12 @@ where
     fn into_i128_inner(self) -> i128 {
         let mut total: i128 = 0;
         let mut place: i128 = 0;
-        for digit in self.iter().rev() {
+        let sign = self.sign();
+        for digit in self.rev() {
             place = if place == 0 { 1 } else { place * BASE as i128 };
             total += (digit as i128) * place;
         }
-        if self.sign() == Negative {
+        if sign == Negative {
             total = -total;
         }
         total
@@ -628,6 +637,40 @@ where
     /// ```
     fn push_front(&mut self, digit: Digit);
 
+    /// Pop the rightmost digit from the end of the int, and return it. If the last digit is popped,
+    /// the number may become denormalized; make sure to call `.normalize()` before performing
+    /// additional operations to prevent undefined functionality.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let mut a: Tight<10> = 651.into();
+    /// let digit = a.pop_back();
+    /// assert_eq!(a, 65.into());
+    /// assert_eq!(digit, Some(1));
+    /// ```
+    fn pop_back(&mut self) -> Option<Digit> {
+        let digit = self.get_back(1);
+        if digit.is_some() {
+            self.shr_assign_inner(1);
+        }
+        digit
+    }
+
+    /// Pop the leftmost digit from the end of the int, and return it. If the last digit is popped,
+    /// the number may become denormalized; make sure to call `.normalize()` before performing
+    /// additional operations to prevent undefined functionality.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let mut a: Tight<10> = 651.into();
+    /// let digit = a.pop_front();
+    /// assert_eq!(a, 51.into());
+    /// assert_eq!(digit, Some(6));
+    /// ```
+    fn pop_front(&mut self) -> Option<Digit>;
+
     /// Divide the int by BASE^amount.
     ///
     /// Note: works in powers of BASE, not in powers of 2.
@@ -723,7 +766,13 @@ where
     /// assert_eq!(a.iter().collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
     /// assert_eq!(a.iter().rev().collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
     /// ```
-    fn iter<'a>(&'a self) -> Self::DigitIterator<'a>;
+    fn iter<'a>(&'a self) -> BigIntIter<'a, BASE, Self> {
+        BigIntIter {
+            index: 0,
+            back_index: self.len(),
+            int: self,
+        }
+    }
 
     /// Return a normalized version of the int. A normalized int:
     /// * has no trailing zeros
@@ -839,21 +888,24 @@ where
     /// use big_int::prelude::*;
     ///
     /// let a: Loose<10> = 999_999_999.into();
-    /// let b = 56_789.into();
-    /// assert_eq!(a.div_rem(b), Ok((17_609.into(), 2_498.into())));
+    /// let b: Loose<10> = 56_789.into();
+    /// assert_eq!(a.div_rem::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
     /// ```
-    fn div_rem(mut self, mut rhs: Self) -> Result<(Self, Self), BigIntError> {
-        if rhs.clone().normalized() == Self::zero() {
+    fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        mut self,
+        mut rhs: RHS,
+    ) -> Result<(OUT, OUT), BigIntError> {
+        if rhs.is_zero() {
             return Err(BigIntError::DivisionByZero);
         }
         if rhs.len() > self.len() {
-            return Ok((Self::zero(), self));
+            return Ok((OUT::zero(), self.convert()));
         }
         let sign = self.sign() * rhs.sign();
         self.set_sign(Positive);
         rhs.set_sign(Positive);
         let quot_digits = self.len() - rhs.len() + 1;
-        let mut quot = Self::Builder::new();
+        let mut quot = OUT::Builder::new();
         let mut prod = Self::zero();
         let mut addend = rhs.clone().shl_inner(quot_digits - 1);
         let mut addends = Vec::new();
@@ -867,7 +919,7 @@ where
         for _ in 0..quot_digits {
             let mut digit_value = 0;
             for power in (0..addends.len()).rev() {
-                let new_prod = prod.clone() + addends[power].clone();
+                let new_prod = prod.clone().add_inner(addends[power].clone());
                 if new_prod <= self {
                     digit_value += 1 << power;
                     prod = new_prod;
@@ -877,8 +929,8 @@ where
             quot.push_back(digit_value);
         }
 
-        let mut rem = self - prod;
-        if rem != Self::zero() {
+        let mut rem: OUT = self.sub_inner(prod);
+        if !rem.is_zero() {
             rem.set_sign(sign);
         }
 
@@ -894,15 +946,16 @@ where
     /// let a: Tight<16> = Loose::<10>::from(99825).convert();
     /// assert_eq!(a, Tight::<16>::from(99825));
     /// ```
-    fn convert<const TO: usize, T: BigInt<{ TO }>>(mut self) -> T {
+    fn convert<const TO: usize, OUT: BigInt<{ TO }>>(mut self) -> OUT {
         let to = TO as Digit;
+        let base = BASE as Digit;
         let sign = self.sign();
-        let mut result = T::Builder::new();
+        let mut result = OUT::Builder::new();
 
         // bases are the same; just move the digits from one representation
         // into the other
         if BASE == TO {
-            for digit in self.iter() {
+            for digit in self {
                 result.push_back(digit);
             }
 
@@ -910,7 +963,7 @@ where
         // by converting each individual digit from the current number into
         // several contiguous digits of the target number
         } else if let Some(power) = is_power(BASE, TO) {
-            for mut from_digit in self.iter().rev() {
+            for mut from_digit in self.rev() {
                 for _ in 0..power {
                     result.push_front(from_digit % to);
                     if from_digit >= to {
@@ -925,25 +978,21 @@ where
         // by creating a single digit of the target number from several contiguous digits
         // of the current number
         } else if let Some(power) = is_power(TO, BASE) {
-            println!("Self = {self:?}");
-            let mut iter = self.iter().rev();
+            let mut iter = self.rev();
             loop {
                 let mut to_digit = 0;
                 let mut done = false;
                 let mut place = 1;
                 for _ in 0..power {
                     if let Some(from_digit) = iter.next() {
-                        dbg!(from_digit);
-                        to_digit *= from_digit * place;
-                        dbg!(to_digit);
-                        place *= to;
+                        to_digit += from_digit * place;
+                        place *= base;
                     } else {
                         done = true;
                         break;
                     }
                 }
                 result.push_front(to_digit);
-                println!("result = {result:?}");
                 if done {
                     break;
                 }
@@ -970,10 +1019,10 @@ where
     /// use big_int::prelude::*;
     ///
     /// let a: Tight<10> = (-105).into();
-    /// let b = 15.into();
+    /// let b: Tight<10> = 15.into();
     /// assert!(a.cmp_magnitude(&b).is_gt());
     /// ```
-    fn cmp_magnitude(&self, rhs: &Self) -> Ordering {
+    fn cmp_magnitude<RHS: BigInt<{ BASE }>>(&self, rhs: &RHS) -> Ordering {
         for i in (1..=self.len().max(rhs.len())).rev() {
             match (self.get_back(i), rhs.get_back(i)) {
                 (Some(1..), None) => return Ordering::Greater,
@@ -988,6 +1037,48 @@ where
             }
         }
         Ordering::Equal
+    }
+}
+
+/// An iterator over the digits of a big int.
+///
+/// ```
+/// use big_int::prelude::*;
+/// use std::iter::Rev;
+///
+/// let a: Loose<10> = 12345.into();
+/// let it = a.iter();
+/// let rev_it = a.iter().rev();
+/// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
+/// assert_eq!(rev_it.collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
+/// ```
+pub struct BigIntIter<'a, const BASE: usize, B: BigInt<{ BASE }>> {
+    index: usize,
+    back_index: usize,
+    int: &'a B,
+}
+
+impl<'a, const BASE: usize, B: BigInt<{ BASE }>> Iterator for BigIntIter<'_, BASE, B> {
+    type Item = Digit;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.index < self.back_index)
+            .then_some(&mut self.index)
+            .and_then(|index| {
+                *index += 1;
+                self.int.get_digit(*index - 1)
+            })
+    }
+}
+
+impl<'a, const BASE: usize, B: BigInt<{ BASE }>> DoubleEndedIterator for BigIntIter<'_, BASE, B> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        (self.back_index > self.index)
+            .then_some(&mut self.back_index)
+            .and_then(|index| {
+                *index -= 1;
+                self.int.get_digit(*index)
+            })
     }
 }
 
@@ -1143,93 +1234,35 @@ impl Mul for Sign {
 }
 
 /// Check if a number is a power of another number.
-/// 
+///
 /// If `x` is a power of `y`, return `Some(n)` such that
 /// `x == y^n`. If not, return `None`.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// assert_eq!(is_power(2, 3), None);
 /// assert_eq!(is_power(16, 4), Some(2));
 /// assert_eq!(is_power(27, 3), Some(3));
 /// assert_eq!(is_power(256, 2), Some(8));
 /// ```
 pub fn is_power(mut x: usize, y: usize) -> Option<usize> {
-    let mut power = 1;
-    loop {
-        match x.cmp(&y) {
-            Ordering::Equal => return Some(power),
-            Ordering::Less => return None,
-            Ordering::Greater => {
-                power += 1;
-                x /= y;
+    if x == 1 {
+        Some(0)
+    } else {
+        let mut power = 1;
+        loop {
+            if x % y != 0 {
+                return None;
             }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use big_int::prelude::*;
-
-    #[test]
-    fn eq() {
-        let a = Box::new(unsafe { Tight::<10>::from_raw_parts(vec![0b0110_0101].into(), 0, 8) });
-        let b = Box::new(unsafe { Tight::<10>::from_raw_parts(vec![0b0000_0000, 0b0011001, 0b01000000].into(), 10, 18) });
-        assert!(a.eq_inner(&b));
-    }
-
-    #[test]
-    fn convert() {
-        let n_4: Loose<4> = 78.into();
-        let n_16: Loose<16> = 78.into();
-        assert_eq!(n_4, n_16.convert());
-    }
-
-    #[test]
-    fn convert_2() {
-        let n_4: Loose<4> = 136.into();
-        let n_64: Loose<64> = 136.into();
-        assert_eq!(n_4, n_64.convert());
-    }
-
-    #[test]
-    fn convert_3() {
-        let n_4: Loose<4> = 29.into();
-        let n_256: Loose<256> = 29.into();
-        assert_eq!(n_256, n_4.convert());
-    }
-
-    #[test]
-    fn downconvert_special_cases() {
-        for n in test_values!([u8; 1000], [u16; 2000], [u32; 4000], [u64; 8000]) {
-            let n_4: Tight<4> = n.into();
-            let n_16: Tight<16> = n.into();
-            let n_64: Tight<64> = n.into();
-            let n_256: Tight<256> = n.into();
-            assert_eq!(n_4, n_16.clone().convert(), "{n} 16 > 4");
-            assert_eq!(n_4, n_64.clone().convert(), "{n} 64 > 4");
-            assert_eq!(n_4, n_256.clone().convert(), "{n} 256 > 4");
-            assert_eq!(n_16, n_64.clone().convert(), "{n} 64 > 16");
-            assert_eq!(n_16, n_256.clone().convert(), "{n} 256 > 16");
-            assert_eq!(n_64, n_256.convert(), "{n} 256 > 64");
-        }
-    }
-
-    #[test]
-    fn upconvert_special_cases() {
-        for n in test_values!([u8; 1000], [u16; 2000], [u32; 4000], [u64; 8000]) {
-            let n_4: Tight<4> = n.into();
-            let n_16: Tight<16> = n.into();
-            let n_64: Tight<64> = n.into();
-            let n_256: Tight<256> = n.into();
-            assert_eq!(n_256, n_4.clone().convert(), "{n} 4 > 256");
-            assert_eq!(n_256, n_16.clone().convert(), "{n} 16 > 256");
-            assert_eq!(n_256, n_64.clone().convert(), "{n} 64 > 256");
-            assert_eq!(n_64, n_4.clone().convert(), "{n} 4 > 64");
-            assert_eq!(n_64, n_16.clone().convert(), "{n} 16 > 64");
-            assert_eq!(n_16, n_4.convert(), "{n} 4 > 16");
+            match x.cmp(&y) {
+                Ordering::Equal => return Some(power),
+                Ordering::Less => return None,
+                Ordering::Greater => {
+                    power += 1;
+                    x /= y;
+                }
+            }
         }
     }
 }

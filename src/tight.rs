@@ -17,6 +17,8 @@ use std::collections::VecDeque;
 
 use crate::prelude::*;
 
+mod tests;
+
 /// Represents a single datum of information within a `Tight` int.
 /// The size of this value has no impact on the size of individual
 /// digits that the number can represent; it only impacts memory and
@@ -140,7 +142,6 @@ impl<const BASE: usize> Tight<BASE> {
 
 impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
     type Builder = TightBuilder<{ BASE }>;
-    type DigitIterator<'a> = TightIter<'a, BASE>;
 
     fn len(&self) -> usize {
         (self.end_offset - self.start_offset) / Self::BITS_PER_DIGIT
@@ -270,14 +271,6 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
         self.data.extend(vec![0; new_len - cur_len]);
     }
 
-    fn iter<'a>(&'a self) -> Self::DigitIterator<'a> {
-        TightIter {
-            index: 0,
-            back_index: self.len(),
-            int: self,
-        }
-    }
-
     /// Return a normalized version of the int. Remove trailing zeros, disable the parity flag
     /// if the resulting number is zero, and align the internal bits to the beginning of the
     /// data array.
@@ -300,47 +293,22 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
             self
         }
     }
-}
 
-/// An iterator over the digits of a `Tight` int.
-///
-/// ```
-/// use big_int::prelude::*;
-/// use std::iter::Rev;
-///
-/// let a: Tight<10> = 12345.into();
-/// let it: TightIter<10> = a.iter();
-/// let rev_it: Rev<TightIter<10>> = a.iter().rev();
-/// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
-/// assert_eq!(rev_it.collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
-/// ```
-pub struct TightIter<'a, const BASE: usize> {
-    index: usize,
-    back_index: usize,
-    int: &'a Tight<BASE>,
-}
-
-impl<const BASE: usize> Iterator for TightIter<'_, BASE> {
-    type Item = Digit;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        (self.index < self.back_index)
-            .then_some(&mut self.index)
-            .and_then(|index| {
-                *index += 1;
-                self.int.get_digit(*index - 1)
-            })
-    }
-}
-
-impl<const BASE: usize> DoubleEndedIterator for TightIter<'_, BASE> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        (self.back_index > self.index)
-            .then_some(&mut self.back_index)
-            .and_then(|index| {
-                *index -= 1;
-                self.int.get_digit(*index)
-            })
+    fn pop_front(&mut self) -> Option<Digit> {
+        let digit = self.get_digit(0);
+        if digit.is_some() {
+            self.start_offset += Self::BITS_PER_DIGIT;
+            if self.start_offset >= DATUM_SIZE {
+                let new_start_offset = self.start_offset % DATUM_SIZE;
+                let offset_shift = self.start_offset - new_start_offset;
+                for _ in 0..self.start_offset / DATUM_SIZE {
+                    self.data.pop_front();
+                }
+                self.start_offset = new_start_offset;
+                self.end_offset -= offset_shift;
+            }
+        }
+        digit
     }
 }
 
@@ -410,193 +378,4 @@ const fn bits_per_digit(base: usize) -> usize {
         max_base_of_bits <<= 1;
     }
     bits
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    #[test]
-    fn push_binary_digits() {
-        let mut builder = TightBuilder::<2>::new();
-        builder.push_back(1);
-        builder.push_back(1);
-        builder.push_back(0);
-        builder.push_back(1);
-        builder.push_back(0);
-        builder.push_back(0);
-        builder.push_back(1);
-        assert_eq!(builder.0.data, VecDeque::from([0b11010010]));
-    }
-
-    #[test]
-    fn push_small_digits() {
-        let mut builder = TightBuilder::<4>::new();
-        builder.push_back(0b11);
-        builder.push_back(0b00);
-        builder.push_back(0b11);
-        builder.push_back(0b00);
-        assert_eq!(builder.0.data, VecDeque::from([0b11001100]));
-    }
-
-    #[test]
-    fn push_medium_digits() {
-        let mut builder = TightBuilder::<8192>::new();
-        builder.push_back(0b1010101010101);
-        builder.push_back(0b1111111111111);
-        assert_eq!(
-            builder.0.data,
-            VecDeque::from([0b10101010, 0b10101111, 0b11111111, 0b11000000])
-        );
-    }
-
-    #[test]
-    fn push_large_digits() {
-        let mut builder = TightBuilder::<1048576>::new();
-        builder.push_back(0b11111111111111111111);
-        builder.push_back(0b10010010010010010010);
-        builder.push_back(0b01101101101101101101);
-        assert_eq!(
-            builder.0.data,
-            VecDeque::from([
-                0b11111111, 0b11111111, 0b11111001, 0b00100100, 0b10010010, 0b01101101, 0b10110110,
-                0b11010000
-            ])
-        );
-    }
-
-    #[test]
-    fn push_front_binary_digits() {
-        let mut builder = TightBuilder::<2>::new();
-        builder.push_front(1);
-        builder.push_front(1);
-        builder.push_front(0);
-        builder.push_front(1);
-        builder.push_front(0);
-        builder.push_front(0);
-        builder.push_front(1);
-        assert_eq!(builder.0.data, VecDeque::from([0b01001011]));
-    }
-
-    #[test]
-    fn push_front_small_digits() {
-        let mut builder = TightBuilder::<4>::new();
-        builder.push_front(0b11);
-        builder.push_front(0b00);
-        builder.push_front(0b11);
-        builder.push_front(0b00);
-        assert_eq!(builder.0.data, VecDeque::from([0b00110011]));
-    }
-
-    #[test]
-    fn push_front_medium_digits() {
-        let mut builder = TightBuilder::<8192>::new();
-        builder.push_front(0b1111111111111);
-        builder.push_front(0b1010101010101);
-        assert_eq!(
-            builder.0.data,
-            VecDeque::from([0b00000010, 0b10101010, 0b10111111, 0b11111111])
-        );
-    }
-
-    #[test]
-    fn push_front_large_digits() {
-        let mut builder = TightBuilder::<1048576>::new();
-        builder.push_front(0b11111111111111111111);
-        builder.push_front(0b10010010010010010010);
-        builder.push_front(0b01101101101101101101);
-        assert_eq!(
-            builder.0.data,
-            VecDeque::from([
-                0b00000110, 0b11011011, 0b01101101, 0b10010010, 0b01001001, 0b00101111, 0b11111111,
-                0b11111111
-            ])
-        );
-    }
-
-    #[test]
-    fn build() {
-        let mut builder = TightBuilder::<8192>::new();
-        builder.push_front(0b1111111111111);
-        builder.push_front(0b1010101010101);
-        let number: Tight<8192> = builder.build().into();
-        assert_eq!(
-            number.data,
-            vec![0b10101010, 0b10101111, 0b11111111, 0b11000000]
-        );
-    }
-
-    #[test]
-    fn build_2() {
-        let builder = TightBuilder::<10>::new();
-        let number: Tight<10> = builder.build().into();
-        assert_eq!(number.data, vec![0]);
-    }
-
-    #[test]
-    fn build_3() {
-        let mut builder = TightBuilder::<10>::new();
-        builder.push_back(1);
-        builder.push_back(2);
-        builder.push_back(5);
-        assert_eq!(
-            Tight::<10>::from(builder),
-            Tight::<10> {
-                sign: Positive,
-                data: VecDeque::from(vec![18, 80]),
-                start_offset: 0,
-                end_offset: 12,
-            }
-        );
-    }
-
-    #[test]
-    fn get_digit() {
-        let mut builder = TightBuilder::<10>::new();
-        builder.push_front(4);
-        builder.push_front(3);
-        builder.push_front(2);
-        builder.push_front(1);
-        let int: Tight<10> = builder.into();
-        assert_eq!(int.get_digit(0), Some(1));
-        assert_eq!(int.get_digit(1), Some(2));
-        assert_eq!(int.get_digit(2), Some(3));
-        assert_eq!(int.get_digit(3), Some(4));
-        assert_eq!(int.get_digit(4), None);
-    }
-
-    #[test]
-    fn set_digit() {
-        let mut builder = TightBuilder::<10>::new();
-        builder.push_back(1);
-        builder.push_back(2);
-        builder.push_back(3);
-        builder.push_back(4);
-        let mut int: Tight<10> = builder.into();
-        int.set_digit(1, 8);
-        int.set_digit(2, 0);
-        assert_eq!(int.get_digit(0), Some(1));
-        assert_eq!(int.get_digit(1), Some(8));
-        assert_eq!(int.get_digit(2), Some(0));
-        assert_eq!(int.get_digit(3), Some(4));
-        assert_eq!(int.get_digit(4), None);
-    }
-
-    // macro_rules! base_conv_print {
-    //     ($d:expr; $($b:literal),*) => {
-    //         let a: Tight<256> = $d.into();
-    //         printbytes!(a.data);
-    //         $(
-    //             let a: Tight<$b> = a.convert();
-    //             println!("{}: ", $b);
-    //             printbytes!(a.data);
-    //         )*
-    //     };
-    // }
-
-    // #[test]
-    // fn conversion_3() {
-    //     base_conv_print!([255, 0, 0, 0]; 128, 64, 32, 16, 8, 4, 2);
-    // }
 }

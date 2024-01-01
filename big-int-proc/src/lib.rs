@@ -7,17 +7,20 @@ pub fn auto_big_int_derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let name = &ast.ident;
 
-    let int_conversions = [(
-        "from_i128_inner",
-        "into_i128_inner",
-        "i128",
-        ["i128", "i64", "i32", "i16", "i8", "isize"],
-    ), (
-        "from_u128_inner",
-        "into_u128_inner",
-        "u128",
-        ["u128", "u64", "u32", "u16", "u8", "usize"],
-    )]
+    let int_conversions = [
+        (
+            "from_i128_inner",
+            "into_i128_inner",
+            "i128",
+            ["i128", "i64", "i32", "i16", "i8", "isize"],
+        ),
+        (
+            "from_u128_inner",
+            "into_u128_inner",
+            "u128",
+            ["u128", "u64", "u32", "u16", "u8", "usize"],
+        ),
+    ]
     .into_iter()
     .map(|(from, into, from_target_type, int_types)| {
         int_types.map(|int| {
@@ -186,6 +189,20 @@ pub fn auto_big_int_derive(input: TokenStream) -> TokenStream {
         impl<const BASE: usize> ::std::iter::FromIterator<::big_int::Digit> for #name<BASE> {
             fn from_iter<T: IntoIterator<Item = ::big_int::Digit>>(iter: T) -> Self {
                 <#name<BASE> as ::big_int::BigInt<BASE>>::from_iter_inner(iter)
+            }
+        }
+
+        impl<const BASE: usize> ::std::iter::Iterator for #name<BASE> {
+            type Item = ::big_int::Digit;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                <#name<BASE> as ::big_int::BigInt<BASE>>::next_inner(self)
+            }
+        }
+
+        impl<const BASE: usize> ::std::iter::DoubleEndedIterator for #name<BASE> {
+            fn next_back(&mut self) -> Option<Self::Item> {
+                <#name<BASE> as ::big_int::BigInt<BASE>>::next_back_inner(self)
             }
         }
 
