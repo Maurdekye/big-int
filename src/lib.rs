@@ -498,7 +498,13 @@ where
         if self.sign() == Negative {
             panic!("uint conversion with underflow");
         }
-        self.into_i128_inner() as u128
+        let mut total: u128 = 0;
+        let mut place: u128 = 0;
+        for digit in self.rev() {
+            place = if place == 0 { 1 } else { place * BASE as u128 };
+            total += (digit as u128) * place;
+        }
+        total
     }
 
     /// Default implementation of `Into<_>` for all signed primitive int types.
