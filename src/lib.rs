@@ -909,19 +909,23 @@ where
         // current base is a power of the target base; perform a fast conversion
         // by converting each individual digit from the current number into
         // several contiguous digits of the target number
-        } else if let Some(_) = is_power(BASE, TO) {
+        } else if let Some(power) = is_power(BASE, TO) {
             for mut from_digit in self.iter().rev() {
-                while from_digit > to {
+                for _ in 0..power {
                     result.push_front(from_digit % to);
-                    from_digit /= to;
+                    if from_digit >= to {
+                        from_digit /= to;
+                    } else {
+                        from_digit = 0;
+                    }
                 }
-                result.push_front(from_digit);
             }
 
         // target base is a power of the current base; perform a fast conversion
         // by creating a single digit of the target number from several contiguous digits
         // of the current number
         } else if let Some(power) = is_power(TO, BASE) {
+            println!("Self = {self:?}");
             let mut iter = self.iter().rev();
             loop {
                 let mut to_digit = 0;
@@ -929,7 +933,9 @@ where
                 let mut place = 1;
                 for _ in 0..power {
                     if let Some(from_digit) = iter.next() {
+                        dbg!(from_digit);
                         to_digit *= from_digit * place;
+                        dbg!(to_digit);
                         place *= to;
                     } else {
                         done = true;
@@ -937,6 +943,7 @@ where
                     }
                 }
                 result.push_front(to_digit);
+                println!("result = {result:?}");
                 if done {
                     break;
                 }
@@ -1181,19 +1188,17 @@ mod tests {
     }
 
     #[test]
-    fn upconvert_special_cases() {
-        for n in test_values!([u8; 1000], [u16; 2000], [u32; 4000], [u64; 8000]) {
-            let n_4: Tight<4> = n.into();
-            let n_16: Tight<16> = n.into();
-            let n_64: Tight<64> = n.into();
-            let n_256: Tight<256> = n.into();
-            assert_eq!(n_4, n_16.clone().convert(), "{n} 4 > 16");
-            assert_eq!(n_4, n_64.clone().convert(), "{n} 4 > 64");
-            assert_eq!(n_4, n_256.clone().convert(), "{n} 4 > 256");
-            assert_eq!(n_16, n_64.clone().convert(), "{n} 16 > 64");
-            assert_eq!(n_16, n_256.clone().convert(), "{n} 16 > 256");
-            assert_eq!(n_64, n_256.convert(), "{n} 64 > 256");
-        }
+    fn convert_2() {
+        let n_4: Loose<4> = 136.into();
+        let n_64: Loose<64> = 136.into();
+        assert_eq!(n_4, n_64.convert());
+    }
+
+    #[test]
+    fn convert_3() {
+        let n_4: Loose<4> = 29.into();
+        let n_256: Loose<256> = 29.into();
+        assert_eq!(n_256, n_4.convert());
     }
 
     #[test]
@@ -1203,12 +1208,28 @@ mod tests {
             let n_16: Tight<16> = n.into();
             let n_64: Tight<64> = n.into();
             let n_256: Tight<256> = n.into();
-            assert_eq!(n_256, n_4.clone().convert(), "{n} 256 > 4");
-            assert_eq!(n_256, n_16.clone().convert(), "{n} 256 > 16");
-            assert_eq!(n_256, n_64.clone().convert(), "{n} 256 > 64");
-            assert_eq!(n_16, n_256.clone().convert(), "{n} 16 > 64");
-            assert_eq!(n_16, n_64.clone().convert(), "{n} 16 > 256");
-            assert_eq!(n_64, n_256.convert(), "{n} 64 > 256");
+            assert_eq!(n_4, n_16.clone().convert(), "{n} 16 > 4");
+            assert_eq!(n_4, n_64.clone().convert(), "{n} 64 > 4");
+            assert_eq!(n_4, n_256.clone().convert(), "{n} 256 > 4");
+            assert_eq!(n_16, n_64.clone().convert(), "{n} 64 > 16");
+            assert_eq!(n_16, n_256.clone().convert(), "{n} 256 > 16");
+            assert_eq!(n_64, n_256.convert(), "{n} 256 > 64");
+        }
+    }
+
+    #[test]
+    fn upconvert_special_cases() {
+        for n in test_values!([u8; 1000], [u16; 2000], [u32; 4000], [u64; 8000]) {
+            let n_4: Tight<4> = n.into();
+            let n_16: Tight<16> = n.into();
+            let n_64: Tight<64> = n.into();
+            let n_256: Tight<256> = n.into();
+            assert_eq!(n_256, n_4.clone().convert(), "{n} 4 > 256");
+            assert_eq!(n_256, n_16.clone().convert(), "{n} 16 > 256");
+            assert_eq!(n_256, n_64.clone().convert(), "{n} 64 > 256");
+            assert_eq!(n_64, n_4.clone().convert(), "{n} 4 > 64");
+            assert_eq!(n_64, n_16.clone().convert(), "{n} 16 > 64");
+            assert_eq!(n_16, n_4.convert(), "{n} 4 > 16");
         }
     }
 }
