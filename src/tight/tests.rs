@@ -175,6 +175,26 @@ fn pop_back() {
     assert_eq!(digit, Some(1));
 }
 
+#[test]
+fn as_iter() {
+    let a: Tight<10> = 134522.into();
+    let mut v = Vec::new();
+    for digit in a {
+        v.push(digit);
+    }
+    assert_eq!(v, vec![1, 3, 4, 5, 2, 2]);
+}
+
+#[test]
+fn as_rev_iter() {
+    let mut a: Tight<10> = 134522.into();
+    let mut v = Vec::new();
+    while let Some(digit) = a.next_back() {
+        v.push(digit);
+    }
+    assert_eq!(v, vec![2, 2, 5, 4, 3, 1]);
+}
+
 // macro_rules! base_conv_print {
 //     ($d:expr; $($b:literal),*) => {
 //         let a: Tight<256> = $d.into();

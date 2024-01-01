@@ -649,13 +649,7 @@ where
     /// assert_eq!(a, 65.into());
     /// assert_eq!(digit, Some(1));
     /// ```
-    fn pop_back(&mut self) -> Option<Digit> {
-        let digit = self.get_back(1);
-        if digit.is_some() {
-            self.shr_assign_inner(1);
-        }
-        digit
-    }
+    fn pop_back(&mut self) -> Option<Digit>;
 
     /// Pop the leftmost digit from the end of the int, and return it. If the last digit is popped,
     /// the number may become denormalized; make sure to call `.normalize()` before performing

@@ -61,15 +61,15 @@ impl<const BASE: usize> Tight<BASE> {
     /// * `start_offset <= end_offset`
     /// * `end_offset <= data.len() * big_int::tight::DATUM_SIZE`
     /// * `(end_offset - start_offset) % Tight::<BASE>::BITS_PER_DIGIT == 0`
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let a: Tight<10> = unsafe { Tight::from_raw_parts(
     ///     vec![0b0001_1001, 0b0101_0000].into(),
     ///     0, 16
     /// ) };
-    /// 
+    ///
     /// assert_eq!(a, 1950.into());
     /// ```
     pub unsafe fn from_raw_parts(
@@ -87,12 +87,12 @@ impl<const BASE: usize> Tight<BASE> {
 
     /// Return the int with the bits within aligned to the beginning of the data segment
     /// and unnecessary extra data truncated.
-    /// 
+    ///
     /// It's likely unnecessary to invoke this directly unless using `Tight::from_raw_parts`.
-    /// 
+    ///
     /// ```
     /// use big_int::prelude::*;
-    /// 
+    ///
     /// let mut a: Tight<10> = unsafe { Tight::from_raw_parts(
     ///     vec![0b0000_0000, 0b0000_1001, 0b0101_0000, 0b0000_0000].into(),
     ///     12, 20
@@ -306,6 +306,21 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
                 }
                 self.start_offset = new_start_offset;
                 self.end_offset -= offset_shift;
+            }
+        }
+        digit
+    }
+
+    fn pop_back(&mut self) -> Option<Digit> {
+        let digit = self.get_back(1);
+        if digit.is_some() {
+            self.end_offset = self
+                .end_offset
+                .checked_sub(Self::BITS_PER_DIGIT)
+                .unwrap_or_default()
+                .max(self.start_offset);
+            for _ in 0..self.data.len() - self.end_offset.div_ceil(DATUM_SIZE) {
+                self.data.pop_back();
             }
         }
         digit

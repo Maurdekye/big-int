@@ -481,3 +481,23 @@ fn shr() {
     assert_eq!(Loose::<2>::from(256) >> 4.into(), 16.into());
     assert_eq!(Loose::<16>::from(28672) >> 3.into(), 7.into());
 }
+
+#[test]
+fn as_iter() {
+    let a: Loose<10> = 134522.into();
+    let mut v = Vec::new();
+    for digit in a {
+        v.push(digit);
+    }
+    assert_eq!(v, vec![1, 3, 4, 5, 2, 2]);
+}
+
+#[test]
+fn as_rev_iter() {
+    let a: Loose<10> = 134522.into();
+    let mut v = Vec::new();
+    for digit in a.rev() {
+        v.push(digit);
+    }
+    assert_eq!(v, vec![2, 2, 5, 4, 3, 1]);
+}

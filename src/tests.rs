@@ -77,15 +77,6 @@ fn convert_special_cases_2() {
     }
 }
 
-#[test]
-fn into_iter() {
-    let a: Tight<10> = 134522.into();
-    let mut v = Vec::new();
-    for digit in a {
-        v.push(digit);
-    }
-    assert_eq!(v, vec![1, 3, 4, 5, 2, 2]);
-}
 
 #[test]
 fn cmp() {
