@@ -895,15 +895,58 @@ where
     /// assert_eq!(a, Tight::<16>::from(99825));
     /// ```
     fn convert<const TO: usize, T: BigInt<{ TO }>>(mut self) -> T {
+        let to = TO as Digit;
         let sign = self.sign();
         let mut result = T::Builder::new();
+
+        // bases are the same; just move the digits from one representation
+        // into the other
         if BASE == TO {
             for digit in self.iter() {
                 result.push_back(digit);
             }
+
+        // current base is a power of the target base; perform a fast conversion
+        // by converting each individual digit from the current number into
+        // several contiguous digits of the target number
+        } else if let Some(_) = is_power(BASE, TO) {
+            for mut from_digit in self.iter().rev() {
+                while from_digit > to {
+                    result.push_front(from_digit % to);
+                    from_digit /= to;
+                }
+                result.push_front(from_digit);
+            }
+
+        // target base is a power of the current base; perform a fast conversion
+        // by creating a single digit of the target number from several contiguous digits
+        // of the current number
+        } else if let Some(power) = is_power(TO, BASE) {
+            let mut iter = self.iter().rev();
+            loop {
+                let mut to_digit = 0;
+                let mut done = false;
+                let mut place = 1;
+                for _ in 0..power {
+                    if let Some(from_digit) = iter.next() {
+                        to_digit *= from_digit * place;
+                        place *= to;
+                    } else {
+                        done = true;
+                        break;
+                    }
+                }
+                result.push_front(to_digit);
+                if done {
+                    break;
+                }
+            }
+
+        // no special conditions apply; just perform the conversion normally via
+        // repeated divisons
         } else {
             self.set_sign(Positive);
-            let to_base = Self::from(TO as Digit);
+            let to_base: Self = to.into();
             while self >= to_base {
                 let (quot, rem) = self.div_rem(to_base.clone()).unwrap();
                 self = quot;
@@ -1092,6 +1135,33 @@ impl Mul for Sign {
     }
 }
 
+/// Check if a number is a power of another number.
+/// 
+/// If `x` is a power of `y`, return `Some(n)` such that
+/// `x == y^n`. If not, return `None`.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// 
+/// assert_eq!(is_power(2, 3), None);
+/// assert_eq!(is_power(16, 4), Some(2));
+/// assert_eq!(is_power(27, 3), Some(3));
+/// assert_eq!(is_power(256, 2), Some(8));
+/// ```
+pub fn is_power(mut x: usize, y: usize) -> Option<usize> {
+    let mut power = 1;
+    loop {
+        match x.cmp(&y) {
+            Ordering::Equal => return Some(power),
+            Ordering::Less => return None,
+            Ordering::Greater => {
+                power += 1;
+                x /= y;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use big_int::prelude::*;
@@ -1101,5 +1171,44 @@ mod tests {
         let a = Box::new(unsafe { Tight::<10>::from_raw_parts(vec![0b0110_0101].into(), 0, 8) });
         let b = Box::new(unsafe { Tight::<10>::from_raw_parts(vec![0b0000_0000, 0b0011001, 0b01000000].into(), 10, 18) });
         assert!(a.eq_inner(&b));
+    }
+
+    #[test]
+    fn convert() {
+        let n_4: Loose<4> = 78.into();
+        let n_16: Loose<16> = 78.into();
+        assert_eq!(n_4, n_16.convert());
+    }
+
+    #[test]
+    fn upconvert_special_cases() {
+        for n in test_values!([u8; 1000], [u16; 2000], [u32; 4000], [u64; 8000]) {
+            let n_4: Tight<4> = n.into();
+            let n_16: Tight<16> = n.into();
+            let n_64: Tight<64> = n.into();
+            let n_256: Tight<256> = n.into();
+            assert_eq!(n_4, n_16.clone().convert(), "{n} 4 > 16");
+            assert_eq!(n_4, n_64.clone().convert(), "{n} 4 > 64");
+            assert_eq!(n_4, n_256.clone().convert(), "{n} 4 > 256");
+            assert_eq!(n_16, n_64.clone().convert(), "{n} 16 > 64");
+            assert_eq!(n_16, n_256.clone().convert(), "{n} 16 > 256");
+            assert_eq!(n_64, n_256.convert(), "{n} 64 > 256");
+        }
+    }
+
+    #[test]
+    fn downconvert_special_cases() {
+        for n in test_values!([u8; 1000], [u16; 2000], [u32; 4000], [u64; 8000]) {
+            let n_4: Tight<4> = n.into();
+            let n_16: Tight<16> = n.into();
+            let n_64: Tight<64> = n.into();
+            let n_256: Tight<256> = n.into();
+            assert_eq!(n_256, n_4.clone().convert(), "{n} 256 > 4");
+            assert_eq!(n_256, n_16.clone().convert(), "{n} 256 > 16");
+            assert_eq!(n_256, n_64.clone().convert(), "{n} 256 > 64");
+            assert_eq!(n_16, n_256.clone().convert(), "{n} 16 > 64");
+            assert_eq!(n_16, n_64.clone().convert(), "{n} 16 > 256");
+            assert_eq!(n_64, n_256.convert(), "{n} 64 > 256");
+        }
     }
 }
