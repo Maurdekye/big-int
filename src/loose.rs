@@ -1,4 +1,4 @@
-//! loosely packed big int implementation.
+//! Loosely packed big int implementations.
 //!
 //! ```
 //! use big_int::prelude::*;
@@ -20,25 +20,23 @@ use crate::prelude::*;
 use std::{collections::VecDeque, vec};
 
 macro_rules! loose_definition {
-    ($name:ident, $denormal_name:ident, $builder_name:ident, $data_type:ty) => {
+    (
+        $data_type:ty; 
 
-        /// Shorthand for a denormalized loose int.
+        $(#[$denormal_meta:meta])* 
+        $denormal_name:ident; 
+
+        $(#[$type_meta:meta])*
+        $name:ident;
+
+        $(#[$builder_meta:meta])*
+        $builder_name:ident;
+    ) => {
+
+        $(#[$denormal_meta])*
         pub type $denormal_name<const BASE: usize> = Denormal<BASE, $name<BASE>>;
 
-        /// A loosely-packed arbitrary base big int implementation.
-        /// Supports any base from 2-u64::MAX.
-        ///
-        /// Each digit requires 8 bytes of storage, making this a somewhat space-inefficient
-        /// implementation. however, the lack of additional complexity improves runtime efficiency over the
-        /// tightly-packed implementation.
-        ///
-        /// ```
-        /// use big_int::prelude::*;
-        ///
-        /// let a: Loose<10> = 593.into();
-        /// let b = a * 96.into();
-        /// assert_eq!(b, 56928.into());
-        /// ```
+        $(#[$type_meta])*
         #[derive(Clone, Debug, BigIntTraits)]
         pub struct $name<const BASE: usize> {
             sign: Sign,
@@ -46,7 +44,7 @@ macro_rules! loose_definition {
         }
 
         impl<const BASE: usize> $name<BASE> {
-            /// Create a new `Loose` int directly from a `Vec` of individual digits.
+            /// Create a new loose int directly from a `Vec` of individual digits.
             ///
             /// Ensure the resulting int is properly normalized, and that no digits are greater than or
             /// equal to the base, to preserve soundness.
@@ -151,22 +149,7 @@ macro_rules! loose_definition {
             }
         }
 
-        /// A builder for a `Loose` int.
-        ///
-        /// You're most likely better off using one of the `From` implementations
-        /// as opposed to directly building your int via a builder.
-        ///
-        /// ```
-        /// use big_int::prelude::*;
-        ///
-        /// let mut a = LooseBuilder::<10>::new();
-        /// a.push_back(5);
-        /// a.push_back(3);
-        /// a.push_back(0);
-        /// a.push_back(4);
-        /// let a: Loose<10> = a.into();
-        /// assert_eq!(a, 5304.into());
-        /// ```
+        $(#[$builder_meta])*
         #[derive(Debug)]
         pub struct $builder_name<const BASE: usize> {
             sign: Sign,
@@ -215,7 +198,166 @@ macro_rules! loose_definition {
     };
 }
 
-loose_definition!(LooseBytes, DenormalLooseBytes, LooseBytesBuilder, u8);
-loose_definition!(LooseShorts, DenormalLooseShorts, LooseShortsBuilder, u16);
-loose_definition!(LooseWords, DenormalLooseWords, LooseWordsBuilder, u32);
-loose_definition!(Loose, DenormalLoose, LooseBuilder, u64);
+loose_definition!(
+    u8;
+    
+    /// Shorthand to represent a denormalized `LooseBytes` int.
+    DenormalLooseBytes;
+
+    /// A loosely-packed arbitrary base big int implementation.
+    /// Supports any base from 2-u8::MAX.
+    ///
+    /// Each digit requires 1 byte of storage, making this a slightly space-inefficient
+    /// implementation for smaller bases. However, the lack of additional complexity 
+    /// improves runtime efficiency over the tightly-packed implementation.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: LooseBytes<10> = 593.into();
+    /// let b = a * 96.into();
+    /// assert_eq!(b, 56928.into());
+    /// ```
+    LooseBytes;
+    
+    /// A builder for a `LooseBytes` int.
+    ///
+    /// You're most likely better off using one of the `From` implementations
+    /// as opposed to directly building your int via a builder.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let mut a = LooseBytesBuilder::<10>::new();
+    /// a.push_back(5);
+    /// a.push_back(3);
+    /// a.push_back(0);
+    /// a.push_back(4);
+    /// let a: LooseBytes<10> = a.into();
+    /// assert_eq!(a, 5304.into());
+    /// ```
+    LooseBytesBuilder;
+);
+
+loose_definition!(
+    u16;
+    
+    /// Shorthand to represent a denormalized `LooseShorts` int.
+    DenormalLooseShorts;
+
+    /// A loosely-packed arbitrary base big int implementation.
+    /// Supports any base from 2-u16::MAX.
+    ///
+    /// Each digit requires 2 bytes of storage, making this a somewhat space-inefficient
+    /// implementation for smaller bases. However, the lack of additional complexity 
+    /// improves runtime efficiency over the tightly-packed implementation.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: LooseShorts<10> = 593.into();
+    /// let b = a * 96.into();
+    /// assert_eq!(b, 56928.into());
+    /// ```
+    LooseShorts; 
+
+    /// A builder for a `LooseShorts` int.
+    ///
+    /// You're most likely better off using one of the `From` implementations
+    /// as opposed to directly building your int via a builder.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let mut a = LooseShortsBuilder::<10>::new();
+    /// a.push_back(5);
+    /// a.push_back(3);
+    /// a.push_back(0);
+    /// a.push_back(4);
+    /// let a: LooseShorts<10> = a.into();
+    /// assert_eq!(a, 5304.into());
+    /// ```
+    LooseShortsBuilder;
+);
+
+loose_definition!(
+    u32;
+
+    /// Shorthand to represent a denormalized `LooseWords` int.
+    DenormalLooseWords;
+
+    /// A loosely-packed arbitrary base big int implementation.
+    /// Supports any base from 2-u32::MAX.
+    ///
+    /// Each digit requires 4 bytes of storage, making this a fairly space-inefficient
+    /// implementation for smaller bases. However, the lack of additional complexity 
+    /// improves runtime efficiency over the tightly-packed implementation.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: LooseWords<10> = 593.into();
+    /// let b = a * 96.into();
+    /// assert_eq!(b, 56928.into());
+    /// ```
+    LooseWords; 
+
+    /// A builder for a `LooseWords` int.
+    ///
+    /// You're most likely better off using one of the `From` implementations
+    /// as opposed to directly building your int via a builder.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let mut a = LooseWordsBuilder::<10>::new();
+    /// a.push_back(5);
+    /// a.push_back(3);
+    /// a.push_back(0);
+    /// a.push_back(4);
+    /// let a: LooseWords<10> = a.into();
+    /// assert_eq!(a, 5304.into());
+    /// ```
+    LooseWordsBuilder;
+);
+
+loose_definition!(
+    u64;
+
+    /// Shorthand to represent a denormalized `Loose` int.
+    DenormalLoose;
+
+    /// A loosely-packed arbitrary base big int implementation.
+    /// Supports any base from 2-u64::MAX.
+    ///
+    /// Each digit requires 8 bytes of storage, making this a very space-inefficient
+    /// implementation for smaller bases. However, the lack of additional complexity 
+    /// improves runtime efficiency over the tightly-packed implementation.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 593.into();
+    /// let b = a * 96.into();
+    /// assert_eq!(b, 56928.into());
+    /// ```
+    Loose;
+
+    /// A builder for a `Loose` int.
+    ///
+    /// You're most likely better off using one of the `From` implementations
+    /// as opposed to directly building your int via a builder.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let mut a = LooseBuilder::<10>::new();
+    /// a.push_back(5);
+    /// a.push_back(3);
+    /// a.push_back(0);
+    /// a.push_back(4);
+    /// let a: Loose<10> = a.into();
+    /// assert_eq!(a, 5304.into());
+    /// ```
+    LooseBuilder;
+);
