@@ -199,3 +199,10 @@ impl<const BASE: usize> From<LooseBuilder<BASE>> for Denormal<BASE, Loose<BASE>>
         Denormal(Loose { sign, digits })
     }
 }
+
+impl<const BASE: usize> From<LooseBuilder<BASE>> for Loose<BASE> {
+    fn from(value: LooseBuilder<BASE>) -> Self {
+        let denormal: <Self as BigInt<BASE>>::Denormal = value.into();
+        denormal.unwrap()
+    }
+}

@@ -104,8 +104,7 @@ fn build() {
     let mut builder = TightBuilder::<8192>::new();
     builder.push_front(0b1111111111111);
     builder.push_front(0b1010101010101);
-    let denormal: DenormalTight<8192> = builder.into();
-    let number: Tight<8192> = denormal.unwrap();
+    let number: Tight<8192> = builder.into();
     assert_eq!(
         number.data,
         vec![0b10101010, 0b10101111, 0b11111111, 0b11000000]
@@ -115,8 +114,7 @@ fn build() {
 #[test]
 fn build_2() {
     let builder = TightBuilder::<10>::new();
-    let denormal: DenormalTight<10> = builder.into();
-    let number: Tight<10> = denormal.unwrap();
+    let number: Tight<10> = builder.into();
     assert_eq!(number.data, vec![0]);
 }
 
@@ -126,8 +124,7 @@ fn build_3() {
     builder.push_back(1);
     builder.push_back(2);
     builder.push_back(5);
-    let denormal: DenormalTight<10> = builder.into();
-    let int: Tight<10> = denormal.unwrap();
+    let int: Tight<10> = builder.into();
     assert_eq!(
         int,
         Tight::<10> {

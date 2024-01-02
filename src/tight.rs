@@ -382,6 +382,13 @@ impl<const BASE: usize> From<TightBuilder<BASE>> for Denormal<BASE, Tight<BASE>>
     }
 }
 
+impl<const BASE: usize> From<TightBuilder<BASE>> for Tight<BASE> {
+    fn from(value: TightBuilder<BASE>) -> Self {
+        let denormal: <Self as BigInt<BASE>>::Denormal = value.into();
+        denormal.unwrap()
+    }
+}
+
 const fn bits_per_digit(base: usize) -> usize {
     let mut bits = 1;
     let mut max_base_of_bits = 2;

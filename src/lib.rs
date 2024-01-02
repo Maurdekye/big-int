@@ -111,7 +111,8 @@ macro_rules! mask {
 /// a.push_back(1);
 /// a.push_back(0);
 /// a.push_back(4);
-/// let a: Tight<10> = a.build();
+/// let a: DenormalTight<10> = a.into();
+/// let a: Tight<10> = a.unwrap();
 /// assert_eq!(a, 104.into());
 /// ```
 pub trait BigInt<const BASE: usize>
@@ -168,7 +169,7 @@ where
         + Into<i128>
         + Into<isize>,
 {
-    type Builder: BigIntBuilder<{ BASE }> + Into<Self::Denormal>;
+    type Builder: BigIntBuilder<{ BASE }> + Into<Self::Denormal> + Into<Self>;
     type Denormal: BigInt<BASE> + From<Self> + UnsafeInto<Self> + Unwrap<Self>;
 
     /// Default implementation of `big_int::GetBack`.
@@ -668,7 +669,9 @@ where
     /// use big_int::prelude::*;
     ///
     /// let mut a: Tight<10> = 6.into();
-    /// a.push_front(1);
+    /// unsafe { 
+    ///     a.push_front(1);
+    /// }
     /// assert_eq!(a.normalized(), 16.into());
     /// ```
     unsafe fn push_front(&mut self, digit: Digit);
@@ -681,7 +684,7 @@ where
     /// use big_int::prelude::*;
     ///
     /// let mut a: Tight<10> = 651.into();
-    /// let digit = a.pop_back();
+    /// let digit = unsafe { a.pop_back() };
     /// assert_eq!(a, 65.into());
     /// assert_eq!(digit, Some(1));
     /// ```
@@ -695,7 +698,7 @@ where
     /// use big_int::prelude::*;
     ///
     /// let mut a: Tight<10> = 651.into();
-    /// let digit = a.pop_front();
+    /// let digit = unsafe { a.pop_front() };
     /// assert_eq!(a, 51.into());
     /// assert_eq!(digit, Some(6));
     /// ```
@@ -740,7 +743,9 @@ where
     /// use big_int::prelude::*;
     ///
     /// let mut a: Tight<10> = 600.into();
-    /// a.shr_assign_inner(2);
+    /// unsafe {
+    ///     a.shr_assign_inner(2);
+    /// }
     /// assert_eq!(a, 6.into());
     /// ```
     unsafe fn shr_assign_inner(&mut self, amount: usize) {
@@ -887,7 +892,7 @@ where
     /// ```
     /// use big_int::prelude::*;
     ///
-    /// assert_eq!(Loose::parse("125", STANDARD_ALPHABET), Ok(Loose::<10>::from(125)));
+    /// assert_eq!(Loose::parse("125", STANDARD_ALPHABET), Ok(DenormalLoose::<10>::from(125)));
     /// ```
     fn parse(value: &str, alphabet: &str) -> Result<Self::Denormal, ParseError> {
         let mut builder = Self::Builder::new();
@@ -911,7 +916,7 @@ where
         if builder.is_empty() {
             Err(ParseError::NotEnoughCharacters)
         } else {
-            Ok(builder.with_sign(sign).into().into())
+            Ok(builder.with_sign(sign).into())
         }
     }
 
@@ -1118,8 +1123,12 @@ where
     /// use big_int::prelude::*;
     ///
     /// let mut a = TightBuilder::<10>::new();
-    /// a.push_back(5);
-    /// assert_eq!(a.build(), 5.into());
+    /// unsafe {
+    ///     a.push_back(5);
+    /// }
+    /// let a: DenormalTight<10> = a.into();
+    /// let a: Tight<10> = a.into();
+    /// assert_eq!(a, 5.into());
     /// ```
     fn new() -> Self;
 
