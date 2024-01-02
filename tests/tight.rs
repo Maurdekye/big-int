@@ -4,6 +4,7 @@ use big_int::{
     test_pairs, test_values,
 };
 use std::str::FromStr;
+use std::ops::AddAssign;
 
 #[test]
 fn parse() {
@@ -125,7 +126,7 @@ fn addition_4() {
 fn addition_5() {
     let mut a: Tight<10> = (-5).into();
     let b: Tight<10> = 0.into();
-    a.add_assign_inner(b);
+    a.add_assign(b);
     assert_eq!(a, (-5).into());
 }
 
@@ -266,7 +267,7 @@ fn division() {
     let a: Tight<10> = 999_999_999.into();
     let b: Tight<10> = 56_789.into();
     assert_eq!(
-        a.div_rem::<_, Tight<10>>(b),
+        a.div_rem_inner::<_, Tight<10>>(b),
         Ok((17_609.into(), 2_498.into()))
     );
 }
@@ -276,7 +277,7 @@ fn division_2() {
     let a: Tight<10> = (-25106).into();
     let b: Tight<10> = 6331.into();
     assert_eq!(
-        a.div_rem::<_, Tight<10>>(b),
+        a.div_rem_inner::<_, Tight<10>>(b),
         Ok(((-3).into(), (-6113).into()))
     );
 }
@@ -323,7 +324,7 @@ fn division_by_zero() {
     let a: Tight<10> = 999_999_999.into();
     let b: Tight<10> = 0.into();
     assert_eq!(
-        a.div_rem::<Tight<10>, Tight<10>>(b),
+        a.div_rem_inner::<Tight<10>, Tight<10>>(b),
         Err(BigIntError::DivisionByZero)
     );
 }
@@ -333,7 +334,7 @@ fn fuzzy_div_rem_2_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         if b > 0 {
             assert_eq!(
-                Tight::<10>::from(a).div_rem::<Tight<10>, Tight<10>>(b.into()),
+                Tight::<10>::from(a).div_rem_inner::<Tight<10>, Tight<10>>(b.into()),
                 Ok(((a / b).into(), (a % b).into())),
                 "{a} / {b}"
             );
@@ -346,7 +347,7 @@ fn fuzzy_base_256_div_rem_2_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         if b > 0 {
             assert_eq!(
-                Tight::<256>::from(a).div_rem::<Tight<256>, Tight<256>>(b.into()),
+                Tight::<256>::from(a).div_rem_inner::<Tight<256>, Tight<256>>(b.into()),
                 Ok(((a / b).into(), (a % b).into())),
                 "{a} / {b}"
             );

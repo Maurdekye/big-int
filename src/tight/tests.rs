@@ -104,7 +104,8 @@ fn build() {
     let mut builder = TightBuilder::<8192>::new();
     builder.push_front(0b1111111111111);
     builder.push_front(0b1010101010101);
-    let number: Tight<8192> = builder.build().into();
+    let denormal: DenormalTight<8192> = builder.into();
+    let number: Tight<8192> = denormal.unwrap();
     assert_eq!(
         number.data,
         vec![0b10101010, 0b10101111, 0b11111111, 0b11000000]
@@ -114,7 +115,8 @@ fn build() {
 #[test]
 fn build_2() {
     let builder = TightBuilder::<10>::new();
-    let number: Tight<10> = builder.build().into();
+    let denormal: DenormalTight<10> = builder.into();
+    let number: Tight<10> = denormal.unwrap();
     assert_eq!(number.data, vec![0]);
 }
 
@@ -124,8 +126,10 @@ fn build_3() {
     builder.push_back(1);
     builder.push_back(2);
     builder.push_back(5);
+    let denormal: DenormalTight<10> = builder.into();
+    let int: Tight<10> = denormal.unwrap();
     assert_eq!(
-        Tight::<10>::from(builder),
+        int,
         Tight::<10> {
             sign: Positive,
             data: VecDeque::from(vec![18, 80]),
@@ -142,7 +146,8 @@ fn get_digit() {
     builder.push_front(3);
     builder.push_front(2);
     builder.push_front(1);
-    let int: Tight<10> = builder.into();
+    let denormal: DenormalTight<10> = builder.into();
+    let int: Tight<10> = denormal.unwrap();
     assert_eq!(int.get_digit(0), Some(1));
     assert_eq!(int.get_digit(1), Some(2));
     assert_eq!(int.get_digit(2), Some(3));
@@ -157,7 +162,8 @@ fn set_digit() {
     builder.push_back(2);
     builder.push_back(3);
     builder.push_back(4);
-    let mut int: Tight<10> = builder.into();
+    let denormal: DenormalTight<10> = builder.into();
+    let mut int: Tight<10> = denormal.unwrap();
     int.set_digit(1, 8);
     int.set_digit(2, 0);
     assert_eq!(int.get_digit(0), Some(1));
@@ -170,7 +176,7 @@ fn set_digit() {
 #[test]
 fn pop_back() {
     let mut a: Tight<10> = 651.into();
-    let digit = a.pop_back();
+    let digit = unsafe { a.pop_back() };
     assert_eq!(a, 65.into());
     assert_eq!(digit, Some(1));
 }

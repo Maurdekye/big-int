@@ -28,6 +28,8 @@ pub type Datum = u8;
 /// Size of the chosen datum unit, in bits.
 pub const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 
+pub type DenormalTight<const BASE: usize> = Denormal<BASE, Tight<BASE>>;
+
 /// A tightly-packed arbitrary base big int implementation.
 /// Supports any base from 2-u64::MAX.
 ///
@@ -142,6 +144,7 @@ impl<const BASE: usize> Tight<BASE> {
 
 impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
     type Builder = TightBuilder<{ BASE }>;
+    type Denormal = Denormal<BASE, Self>;
 
     fn len(&self) -> usize {
         (self.end_offset - self.start_offset) / Self::BITS_PER_DIGIT
@@ -234,7 +237,7 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
         }
     }
 
-    fn push_front(&mut self, digit: Digit) {
+    unsafe fn push_front(&mut self, digit: Digit) {
         let mut bits_left_to_set = Self::BITS_PER_DIGIT;
         while bits_left_to_set > 0 {
             if self.start_offset == 0 {
@@ -255,7 +258,7 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
         }
     }
 
-    fn shr_assign_inner(&mut self, amount: usize) {
+    unsafe fn shr_assign_inner(&mut self, amount: usize) {
         self.end_offset = self
             .end_offset
             .checked_sub(amount * Self::BITS_PER_DIGIT)
@@ -294,7 +297,7 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
         }
     }
 
-    fn pop_front(&mut self) -> Option<Digit> {
+    unsafe fn pop_front(&mut self) -> Option<Digit> {
         let digit = self.get_digit(0);
         if digit.is_some() {
             self.start_offset += Self::BITS_PER_DIGIT;
@@ -311,7 +314,7 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
         digit
     }
 
-    fn pop_back(&mut self) -> Option<Digit> {
+    unsafe fn pop_back(&mut self) -> Option<Digit> {
         let digit = self.get_back(1);
         if digit.is_some() {
             self.end_offset = self
@@ -357,7 +360,7 @@ impl<const BASE: usize> BigIntBuilder<BASE> for TightBuilder<BASE> {
     }
 
     fn push_front(&mut self, digit: Digit) {
-        self.0.push_front(digit);
+        unsafe { self.0.push_front(digit) };
     }
 
     fn push_back(&mut self, digit: Digit) {
@@ -373,15 +376,9 @@ impl<const BASE: usize> BigIntBuilder<BASE> for TightBuilder<BASE> {
     }
 }
 
-impl<const BASE: usize> Build<Tight<BASE>> for TightBuilder<BASE> {
-    fn build(self) -> Tight<BASE> {
-        self.0.normalized()
-    }
-}
-
-impl<const BASE: usize> From<TightBuilder<BASE>> for Tight<BASE> {
+impl<const BASE: usize> From<TightBuilder<BASE>> for Denormal<BASE, Tight<BASE>> {
     fn from(value: TightBuilder<BASE>) -> Self {
-        value.0
+        Denormal(value.0)
     }
 }
 

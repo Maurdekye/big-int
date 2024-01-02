@@ -52,7 +52,8 @@ use self::Sign::*;
 pub use big_int_proc::*;
 
 pub mod prelude {
-    //! Default exports: includes `Loose`, `Tight`, & `Sign`
+    //! Default exports: includes `Loose`, `Tight`, `Sign`, & `Denormal`
+    pub use crate::denormal::*;
     pub use crate::loose::*;
     pub use crate::tight::*;
     pub use crate::Sign::*;
@@ -64,6 +65,7 @@ mod tests;
 pub(crate) mod test_utils;
 
 pub mod base64;
+pub mod denormal;
 pub mod error;
 pub mod get_back;
 pub mod loose;
@@ -166,7 +168,8 @@ where
         + Into<i128>
         + Into<isize>,
 {
-    type Builder: BigIntBuilder<{ BASE }> + Build<Self>;
+    type Builder: BigIntBuilder<{ BASE }> + Into<Self::Denormal>;
+    type Denormal: BigInt<BASE> + From<Self> + UnsafeInto<Self> + Unwrap<Self>;
 
     /// Default implementation of `big_int::GetBack`.
     ///
@@ -229,17 +232,17 @@ where
     /// Default implementation of `Neg`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn neg_inner(self) -> Self {
+    fn neg_inner(self) -> Self::Denormal {
         let sign = self.sign();
-        self.with_sign(-sign)
+        self.with_sign(-sign).into()
     }
 
     /// Default implementation of `Add`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn add_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT {
+    fn add_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
         if self.sign() != rhs.sign() {
-            self.sub_inner(rhs.neg())
+            self.sub_inner::<_, OUT>(rhs.neg())
         } else {
             let sign = self.sign();
             let mut carry = 0;
@@ -261,14 +264,16 @@ where
                     }
                 }
             }
-            result.with_sign(sign).build()
+            result.with_sign(sign).into()
         }
     }
 
     /// Default implementation of `AddAssign`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn add_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+    ///
+    /// If this method is used directly, it may cause the number to become denormalized.
+    unsafe fn add_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
         if self.sign() != rhs.sign() {
             self.sub_assign_inner(rhs.neg_inner());
         } else {
@@ -295,18 +300,20 @@ where
                     }
                 }
             }
-            self.normalize();
         }
     }
 
     /// Default implementation of `Sub`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn sub_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(mut self, rhs: RHS) -> OUT {
+    fn sub_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        mut self,
+        rhs: RHS,
+    ) -> OUT::Denormal {
         if self.sign() != rhs.sign() {
-            self.add_inner(rhs.neg_inner())
+            self.add_inner::<_, OUT>(rhs.neg_inner())
         } else if rhs.cmp_magnitude(&self).is_gt() {
-            rhs.sub_inner::<_, OUT>(self).neg_inner()
+            unsafe { rhs.sub_inner::<_, OUT>(self).unsafe_into() }.neg_inner()
         } else {
             let sign = self.sign();
             let mut result = OUT::Builder::new();
@@ -336,18 +343,24 @@ where
                     }
                 }
             }
-            result.with_sign(sign).build()
+            result.with_sign(sign).into()
         }
     }
 
     /// Default implementation of `SubAssign`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn sub_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+    ///
+    /// If this method is used directly, it may cause the number to become denormalized.
+    unsafe fn sub_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
         if self.sign() != rhs.sign() {
             self.add_assign_inner(rhs.neg_inner());
         } else if rhs.cmp_magnitude(self).is_gt() {
-            *self = rhs.sub_inner::<_, Self>(self.clone()).neg_inner();
+            *self = rhs
+                .sub_inner::<_, Self>(self.clone())
+                .unsafe_into()
+                .neg_inner()
+                .unsafe_into();
         } else {
             let self_len = self.len();
             for i in 1.. {
@@ -380,15 +393,16 @@ where
                     }
                 }
             }
-            self.normalize();
         }
-        self.normalize();
     }
 
     /// Default implementation of `Mul`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn mul_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(mut self, mut rhs: RHS) -> OUT {
+    fn mul_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        mut self,
+        mut rhs: RHS,
+    ) -> OUT::Denormal {
         let sign = self.sign() * rhs.sign();
         self.set_sign(Positive);
         rhs.set_sign(Positive);
@@ -404,71 +418,86 @@ where
         for digit in self.rev() {
             for i in 0..addends.len() {
                 if digit & (1 << i) != 0 {
-                    result.add_assign_inner(addends[i].clone());
+                    unsafe {
+                        result.add_assign_inner(addends[i].clone());
+                    }
                 }
                 addends[i].shl_assign_inner(1);
             }
         }
-        result.with_sign(sign).normalized()
+        result.with_sign(sign).into()
     }
 
     /// Default implementation of `MulAssign`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn mul_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
-        *self = self.clone().mul_inner(rhs);
+    ///
+    /// If this method is used directly, it may cause the number to become denormalized.
+    unsafe fn mul_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+        *self = self.clone().mul_inner::<_, Self>(rhs).unsafe_into();
     }
 
     /// Default implementation of `Div`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn div_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT {
-        self.div_rem(rhs).unwrap().0
+    fn div_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
+        self.div_rem_inner::<_, OUT>(rhs).unwrap().0
     }
 
     /// Default implementation of `DivAssign`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn div_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
-        *self = self.clone().div_rem(rhs).unwrap().0;
+    ///
+    /// If this method is used directly, it may cause the number to become denormalized.
+    unsafe fn div_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+        *self = self
+            .clone()
+            .div_rem_inner::<_, Self>(rhs)
+            .unwrap()
+            .0
+            .unsafe_into();
     }
 
     /// Default implementation of `FromStr`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn from_str_inner(s: &str) -> Result<Self, BigIntError> {
+    fn from_str_inner(s: &str) -> Result<Self::Denormal, BigIntError> {
         Self::parse(s, STANDARD_ALPHABET).map_err(BigIntError::ParseFailed)
     }
 
     /// Default implementation of `FromIterator`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn from_iter_inner<T: IntoIterator<Item = Digit>>(iter: T) -> Self {
+    fn from_iter_inner<T: IntoIterator<Item = Digit>>(iter: T) -> Self::Denormal {
         let mut builder = Self::Builder::new();
         for digit in iter {
             builder.push_back(digit);
         }
-        builder.build()
+        builder.into()
     }
 
     /// Default implementation of `Iterator`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn next_inner(&mut self) -> Option<Digit> {
+    ///
+    /// If this method is used directly, it may cause the number to become denormalized.
+    unsafe fn next_inner(&mut self) -> Option<Digit> {
         self.pop_front()
     }
 
     /// Default implementation of `DoubleEndedIterator`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn next_back_inner(&mut self) -> Option<Digit> {
+    ///
+    /// If this method is used directly, it may cause the number to become denormalized.
+    unsafe fn next_back_inner(&mut self) -> Option<Digit> {
         self.pop_back()
     }
 
     /// Default implementation of `From<_>` for all unsigned primitive int types.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn from_u128_inner(mut value: u128) -> Self {
+    fn from_u128_inner(mut value: u128) -> Self::Denormal {
         let base = BASE as u128;
         let mut result = Self::Builder::new();
         while value >= base {
@@ -477,13 +506,13 @@ where
             result.push_front(rem as Digit);
         }
         result.push_front(value as Digit);
-        result.build()
+        result.into()
     }
 
     /// Default implementation of `From<_>` for all signed primitive int types.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    fn from_i128_inner(value: i128) -> Self {
+    fn from_i128_inner(value: i128) -> Self::Denormal {
         if value < 0 {
             Self::from_u128_inner((-value) as u128).with_sign(Negative)
         } else {
@@ -630,9 +659,10 @@ where
     /// ```
     fn push_back(&mut self, digit: Digit);
 
-    /// Append a digit to the left side of the int. If a zero is pushed onto the end
-    /// of the int, it will become denormalized; make sure to call `.normalize()` before performing
-    /// additional operations to prevent undefined functionality.
+    /// Append a digit to the left side of the int.
+    ///
+    /// If a zero is pushed onto the end
+    /// of the int, it will become denormalized.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -641,11 +671,11 @@ where
     /// a.push_front(1);
     /// assert_eq!(a.normalized(), 16.into());
     /// ```
-    fn push_front(&mut self, digit: Digit);
+    unsafe fn push_front(&mut self, digit: Digit);
 
-    /// Pop the rightmost digit from the end of the int, and return it. If the last digit is popped,
-    /// the number may become denormalized; make sure to call `.normalize()` before performing
-    /// additional operations to prevent undefined functionality.
+    /// Pop the rightmost digit from the end of the int, and return it.
+    ///
+    /// If the last digit is popped, the number will become denormalized.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -655,11 +685,11 @@ where
     /// assert_eq!(a, 65.into());
     /// assert_eq!(digit, Some(1));
     /// ```
-    fn pop_back(&mut self) -> Option<Digit>;
+    unsafe fn pop_back(&mut self) -> Option<Digit>;
 
-    /// Pop the leftmost digit from the end of the int, and return it. If the last digit is popped,
-    /// the number may become denormalized; make sure to call `.normalize()` before performing
-    /// additional operations to prevent undefined functionality.
+    /// Pop the leftmost digit from the end of the int, and return it.
+    ///
+    /// If the last digit is popped, the number will become denormalized.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -669,7 +699,7 @@ where
     /// assert_eq!(a, 51.into());
     /// assert_eq!(digit, Some(6));
     /// ```
-    fn pop_front(&mut self) -> Option<Digit>;
+    unsafe fn pop_front(&mut self) -> Option<Digit>;
 
     /// Divide the int by BASE^amount.
     ///
@@ -687,9 +717,11 @@ where
     /// let a: Tight<10> = 600.into();
     /// assert_eq!(a.shr_inner(2), 6.into());
     /// ```
-    fn shr_inner(mut self, amount: usize) -> Self {
-        self.shr_assign_inner(amount);
-        self
+    fn shr_inner(mut self, amount: usize) -> Self::Denormal {
+        unsafe {
+            self.shr_assign_inner(amount);
+        }
+        self.into()
     }
 
     /// Divide the int by BASE^amount in place.
@@ -702,6 +734,8 @@ where
     /// Also acts as the default implementation of the `ShrAssign` trait,
     /// as provided automatically by `big_int_proc::BigIntTraits`.
     ///
+    /// If the last number is shifted off, may cause the number to become denormalized.
+    ///
     /// ```
     /// use big_int::prelude::*;
     ///
@@ -709,8 +743,8 @@ where
     /// a.shr_assign_inner(2);
     /// assert_eq!(a, 6.into());
     /// ```
-    fn shr_assign_inner(&mut self, amount: usize) {
-        *self = self.clone().shr_inner(amount);
+    unsafe fn shr_assign_inner(&mut self, amount: usize) {
+        *self = self.clone().shr_inner(amount).unsafe_into();
     }
 
     /// Multiply the int by BASE^amount.
@@ -796,7 +830,7 @@ where
         self
     }
 
-    /// Normalize a big int in place.
+    /// Normalize a big int in place. A normalized int:
     /// * has no trailing zeros
     /// * has at least one digit
     /// * is not negative zero
@@ -855,7 +889,7 @@ where
     ///
     /// assert_eq!(Loose::parse("125", STANDARD_ALPHABET), Ok(Loose::<10>::from(125)));
     /// ```
-    fn parse(value: &str, alphabet: &str) -> Result<Self, ParseError> {
+    fn parse(value: &str, alphabet: &str) -> Result<Self::Denormal, ParseError> {
         let mut builder = Self::Builder::new();
         let (sign, chars) = match value.chars().next() {
             Some('-') => (Negative, value.chars().skip(1)),
@@ -877,7 +911,7 @@ where
         if builder.is_empty() {
             Err(ParseError::NotEnoughCharacters)
         } else {
-            Ok(builder.with_sign(sign).build())
+            Ok(builder.with_sign(sign).into().into())
         }
     }
 
@@ -891,15 +925,15 @@ where
     /// let b: Loose<10> = 56_789.into();
     /// assert_eq!(a.div_rem::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
     /// ```
-    fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+    fn div_rem_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         mut self,
         mut rhs: RHS,
-    ) -> Result<(OUT, OUT), BigIntError> {
+    ) -> Result<(OUT::Denormal, OUT::Denormal), BigIntError> {
         if rhs.is_zero() {
             return Err(BigIntError::DivisionByZero);
         }
         if rhs.len() > self.len() {
-            return Ok((OUT::zero(), self.convert()));
+            return Ok((OUT::Denormal::zero(), self.convert_inner::<BASE, OUT>()));
         }
         let sign = self.sign() * rhs.sign();
         self.set_sign(Positive);
@@ -919,22 +953,35 @@ where
         for _ in 0..quot_digits {
             let mut digit_value = 0;
             for power in (0..addends.len()).rev() {
-                let new_prod = prod.clone().add_inner(addends[power].clone());
+                let new_prod = unsafe {
+                    prod.clone()
+                        .add_inner::<_, Self>(addends[power].clone())
+                        .unsafe_into()
+                };
                 if new_prod <= self {
                     digit_value += 1 << power;
                     prod = new_prod;
                 }
-                addends[power].shr_assign_inner(1);
+                unsafe {
+                    addends[power].shr_assign_inner(1);
+                }
             }
             quot.push_back(digit_value);
         }
 
-        let mut rem: OUT = self.sub_inner(prod);
+        let mut rem: OUT::Denormal = self.sub_inner::<_, OUT>(prod);
         if !rem.is_zero() {
             rem.set_sign(sign);
         }
 
-        Ok((quot.with_sign(sign).build(), rem))
+        Ok((quot.with_sign(sign).into(), rem))
+    }
+
+    fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<(OUT, OUT), BigIntError> {
+        self.div_rem_inner::<RHS, OUT>(rhs).map(|(q, r): (OUT::Denormal, OUT::Denormal)| (q.unwrap(), r.unwrap()))
     }
 
     /// Convert an int from its own base to another target base,
@@ -946,7 +993,7 @@ where
     /// let a: Tight<16> = Loose::<10>::from(99825).convert();
     /// assert_eq!(a, Tight::<16>::from(99825));
     /// ```
-    fn convert<const TO: usize, OUT: BigInt<{ TO }>>(mut self) -> OUT {
+    fn convert_inner<const TO: usize, OUT: BigInt<{ TO }>>(mut self) -> OUT::Denormal {
         let to = TO as Digit;
         let base = BASE as Digit;
         let sign = self.sign();
@@ -1004,13 +1051,17 @@ where
             self.set_sign(Positive);
             let to_base: Self = to.into();
             while self >= to_base {
-                let (quot, rem) = self.div_rem(to_base.clone()).unwrap();
-                self = quot;
+                let (quot, rem) = self.div_rem_inner::<_, Self>(to_base.clone()).unwrap();
+                self = unsafe { quot.unsafe_into() }.normalized();
                 result.push_front(Into::<Digit>::into(rem));
             }
             result.push_front(Into::<Digit>::into(self));
         }
-        result.with_sign(sign).build()
+        result.with_sign(sign).into()
+    }
+
+    fn convert<const TO: usize, OUT: BigInt<{ TO }>>(self) -> OUT {
+        self.convert_inner::<TO, OUT>().unwrap()
     }
 
     /// Compare the absolute magnitude of two big ints, ignoring their sign.
@@ -1037,48 +1088,6 @@ where
             }
         }
         Ordering::Equal
-    }
-}
-
-/// An iterator over the digits of a big int.
-///
-/// ```
-/// use big_int::prelude::*;
-/// use std::iter::Rev;
-///
-/// let a: Loose<10> = 12345.into();
-/// let it = a.iter();
-/// let rev_it = a.iter().rev();
-/// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
-/// assert_eq!(rev_it.collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
-/// ```
-pub struct BigIntIter<'a, const BASE: usize, B: BigInt<{ BASE }>> {
-    index: usize,
-    back_index: usize,
-    int: &'a B,
-}
-
-impl<'a, const BASE: usize, B: BigInt<{ BASE }>> Iterator for BigIntIter<'_, BASE, B> {
-    type Item = Digit;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        (self.index < self.back_index)
-            .then_some(&mut self.index)
-            .and_then(|index| {
-                *index += 1;
-                self.int.get_digit(*index - 1)
-            })
-    }
-}
-
-impl<'a, const BASE: usize, B: BigInt<{ BASE }>> DoubleEndedIterator for BigIntIter<'_, BASE, B> {
-    fn next_back(&mut self) -> Option<Self::Item> {
-        (self.back_index > self.index)
-            .then_some(&mut self.back_index)
-            .and_then(|index| {
-                *index -= 1;
-                self.int.get_digit(*index)
-            })
     }
 }
 
@@ -1162,34 +1171,18 @@ where
     fn with_sign(self, sign: Sign) -> Self;
 }
 
-/// Trait that represents the final build step of a BigIntBuilder.
-///
-/// ```
-/// use big_int::prelude::*;
-///
-/// let mut a = TightBuilder::<10>::new();
-/// a.push_back(5);
-/// a.push_back(3);
-/// a.push_back(0);
-/// a.push_back(4);
-/// let a: Tight<10> = a.build();
-/// assert_eq!(a, 5304.into());
-/// ```
-pub trait Build<B> {
-    /// Build the value and return the finalized result.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let mut a = TightBuilder::<10>::new();
-    /// a.push_back(5);
-    /// a.push_back(3);
-    /// a.push_back(0);
-    /// a.push_back(4);
-    /// let a: Tight<10> = a.build();
-    /// assert_eq!(a, 5304.into());
-    /// ```
-    fn build(self) -> B;
+pub trait UnsafeInto<T> {
+    unsafe fn unsafe_into(self) -> T;
+}
+
+impl<T> UnsafeInto<T> for T {
+    unsafe fn unsafe_into(self) -> T {
+        self
+    }
+}
+
+pub trait Unwrap<T> {
+    fn unwrap(self) -> T;
 }
 
 /// Represents the sign of a big int; either Positive or Negative.
@@ -1264,5 +1257,47 @@ pub fn is_power(mut x: usize, y: usize) -> Option<usize> {
                 }
             }
         }
+    }
+}
+
+/// An iterator over the digits of a big int.
+///
+/// ```
+/// use big_int::prelude::*;
+/// use std::iter::Rev;
+///
+/// let a: Loose<10> = 12345.into();
+/// let it = a.iter();
+/// let rev_it = a.iter().rev();
+/// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
+/// assert_eq!(rev_it.collect::<Vec<_>>(), vec![5, 4, 3, 2, 1]);
+/// ```
+pub struct BigIntIter<'a, const BASE: usize, B: BigInt<{ BASE }>> {
+    index: usize,
+    back_index: usize,
+    int: &'a B,
+}
+
+impl<'a, const BASE: usize, B: BigInt<{ BASE }>> Iterator for BigIntIter<'_, BASE, B> {
+    type Item = Digit;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        (self.index < self.back_index)
+            .then_some(&mut self.index)
+            .and_then(|index| {
+                *index += 1;
+                self.int.get_digit(*index - 1)
+            })
+    }
+}
+
+impl<'a, const BASE: usize, B: BigInt<{ BASE }>> DoubleEndedIterator for BigIntIter<'_, BASE, B> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        (self.back_index > self.index)
+            .then_some(&mut self.back_index)
+            .and_then(|index| {
+                *index -= 1;
+                self.int.get_digit(*index)
+            })
     }
 }

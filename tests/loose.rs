@@ -243,7 +243,7 @@ fn division() {
     let a: Loose<10> = 999_999_999.into();
     let b: Loose<10> = 56_789.into();
     assert_eq!(
-        a.div_rem::<_, Loose<10>>(b),
+        a.div_rem_inner::<_, Loose<10>>(b),
         Ok((17_609.into(), 2_498.into()))
     );
 }
@@ -253,7 +253,7 @@ fn division_2() {
     let a: Loose<10> = (-25106).into();
     let b: Loose<10> = 6331.into();
     assert_eq!(
-        a.div_rem::<_, Loose<10>>(b),
+        a.div_rem_inner::<_, Loose<10>>(b),
         Ok(((-3).into(), (-6113).into()))
     );
 }
@@ -262,7 +262,7 @@ fn division_2() {
 fn division_3() {
     let a: Loose<10> = (-27792).into();
     let b: Loose<10> = 6.into();
-    assert_eq!(a.div_rem::<_, Loose<10>>(b), Ok(((-4632).into(), 0.into())));
+    assert_eq!(a.div_rem_inner::<_, Loose<10>>(b), Ok(((-4632).into(), 0.into())));
 }
 
 #[test]
@@ -282,7 +282,7 @@ fn division_5() {
     let a = 30997532758381152_usize;
     let b = 16;
     assert_eq!(
-        Ok((Loose::<10>::from(a / b), (a % b).into())),
+        Ok((Loose::<10>::from(a / b), Loose::<10>::from(a % b))),
         Loose::from(a).div_rem(Loose::<10>::from(b))
     );
 }
@@ -302,7 +302,7 @@ fn division_by_zero() {
     let a: Loose<10> = 999_999_999.into();
     let b: Loose<10> = 0.into();
     assert_eq!(
-        a.div_rem::<_, Loose<10>>(b),
+        a.div_rem_inner::<_, Loose<10>>(b),
         Err(BigIntError::DivisionByZero)
     );
 }
@@ -312,7 +312,7 @@ fn fuzzy_div_rem_2_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         if b > 0 {
             assert_eq!(
-                Loose::<10>::from(a).div_rem::<_, Loose<10>>(Loose::<10>::from(b)),
+                Loose::<10>::from(a).div_rem_inner::<_, Loose<10>>(Loose::<10>::from(b)),
                 Ok(((a / b).into(), (a % b).into())),
                 "{a} / {b}"
             );
@@ -325,7 +325,7 @@ fn fuzzy_base_256_div_rem_2_test() {
     for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
         if b > 0 {
             assert_eq!(
-                Loose::<256>::from(a).div_rem::<_, Loose<256>>(Loose::<256>::from(b)),
+                Loose::<256>::from(a).div_rem_inner::<_, Loose<256>>(Loose::<256>::from(b)),
                 Ok(((a / b).into(), (a % b).into())),
                 "{a} / {b}"
             );

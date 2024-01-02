@@ -23,7 +23,7 @@ pub fn encode(bytes: &[u8]) -> String {
     let padding = 3 - ((digits.len() - 1) % 3) - 1;
     digits.extend(vec![0; padding]);
     let data_as_int: Loose<256> = digits.iter().copied().collect();
-    let base64_data: Loose<64> = data_as_int.convert();
+    let base64_data: Loose<64> = unsafe { data_as_int.convert::<64, Loose<64>>().unsafe_into() };
     let base64_string = base64_data.display(BASE64_ALPHABET).unwrap();
     base64_string[4..base64_string.len() - padding].to_string()
 }
@@ -43,9 +43,12 @@ pub fn decode(b64_string: impl Into<String>) -> Result<Vec<u8>, BigIntError> {
     b64_string = format!("////{b64_string}");
     let padding = 4 - ((b64_string.len() - 1) % 4) - 1;
     b64_string.extend(vec!['A'; padding]);
-    let string_as_int: Loose<64> =
-        BigInt::parse(&b64_string, BASE64_ALPHABET).map_err(BigIntError::ParseFailed)?;
-    let bytes_int: Loose<256> = string_as_int.convert();
+    let string_as_int: Loose<64> = unsafe {
+        Loose::<64>::parse(&b64_string, BASE64_ALPHABET)
+            .map_err(BigIntError::ParseFailed)?
+            .unsafe_into()
+    };
+    let bytes_int: Loose<256> = unsafe { string_as_int.convert::<256, Loose<256>>().unsafe_into() };
     let bytes = bytes_int
         .iter()
         .map(u8::try_from)

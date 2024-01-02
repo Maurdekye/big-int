@@ -18,6 +18,8 @@ use big_int_proc::BigIntTraits;
 use crate::prelude::*;
 use std::{collections::VecDeque, vec};
 
+pub type DenormalLoose<const BASE: usize> = Denormal<BASE, Loose<BASE>>;
+
 /// A loosely-packed arbitrary base big int implementation. 
 /// Supports any base from 2-u64::MAX. 
 /// 
@@ -61,10 +63,9 @@ impl<const BASE: usize> Loose<BASE> {
     }
 }
 
-
-
 impl<const BASE: usize> BigInt<BASE> for Loose<BASE> {
     type Builder = LooseBuilder<{ BASE }>;
+    type Denormal = Denormal<BASE, Self>;
 
     fn len(&self) -> usize {
         self.digits.len()
@@ -122,11 +123,11 @@ impl<const BASE: usize> BigInt<BASE> for Loose<BASE> {
         self.digits.push(digit);
     }
 
-    fn push_front(&mut self, digit: crate::Digit) {
+    unsafe fn push_front(&mut self, digit: crate::Digit) {
         self.digits.insert(0, digit);
     }
 
-    fn shr_assign_inner(&mut self, amount: usize) {
+    unsafe fn shr_assign_inner(&mut self, amount: usize) {
         self.digits =
             self.digits[..self.digits.len().checked_sub(amount).unwrap_or_default()].to_vec();
     }
@@ -135,11 +136,11 @@ impl<const BASE: usize> BigInt<BASE> for Loose<BASE> {
         self.digits.extend(vec![0; amount]);
     }
 
-    fn pop_back(&mut self) -> Option<Digit> {
+    unsafe fn pop_back(&mut self) -> Option<Digit> {
         self.digits.pop()
     }
 
-    fn pop_front(&mut self) -> Option<Digit> {
+    unsafe fn pop_front(&mut self) -> Option<Digit> {
         (!self.digits.is_empty()).then(|| self.digits.remove(0))
     }
 }
@@ -191,16 +192,10 @@ impl<const BASE: usize> BigIntBuilder<BASE> for LooseBuilder<BASE> {
     }
 }
 
-impl<const BASE: usize> Build<Loose<BASE>> for LooseBuilder<BASE> {
-    fn build(self) -> Loose<BASE> {
-        Loose::<BASE>::from(self).normalized()
-    }
-}
-
-impl<const BASE: usize> From<LooseBuilder<BASE>> for Loose<BASE> {
+impl<const BASE: usize> From<LooseBuilder<BASE>> for Denormal<BASE, Loose<BASE>> {
     fn from(value: LooseBuilder<BASE>) -> Self {
         let sign = value.sign;
         let digits = value.digits.into();
-        Loose { sign, digits }
+        Denormal(Loose { sign, digits })
     }
 }

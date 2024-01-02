@@ -31,7 +31,7 @@ mod benches {
                 )
             }
             .normalized();
-            a.clone().div_rem::<Loose<STRESS_TEST_BASE>, Loose<STRESS_TEST_BASE>>(b.clone())
+            a.clone().div_rem_inner::<Loose<STRESS_TEST_BASE>, Loose<STRESS_TEST_BASE>>(b.clone())
         });
     }
 }
