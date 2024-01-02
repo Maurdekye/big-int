@@ -501,3 +501,39 @@ fn as_rev_iter() {
     }
     assert_eq!(v, vec![2, 2, 5, 4, 3, 1]);
 }
+
+#[test]
+fn fuzzy_loose_bytes_tests() {
+    for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
+        assert_eq!(LooseBytes::<10>::from(a) + b.into(), (a + b).into(), "{a} + {b}");
+        assert_eq!(LooseBytes::<10>::from(a) - b.into(), (a - b).into(), "{a} - {b}");
+        assert_eq!(LooseBytes::<10>::from(a) * b.into(), (a * b).into(), "{a} * {b}");
+        if b > 0 {
+            assert_eq!(LooseBytes::<10>::from(a) / b.into(), (a / b).into(), "{a} / {b}");
+        }
+    }
+}
+
+#[test]
+fn fuzzy_loose_shorts_tests() {
+    for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
+        assert_eq!(LooseShorts::<10>::from(a) + b.into(), (a + b).into(), "{a} + {b}");
+        assert_eq!(LooseShorts::<10>::from(a) - b.into(), (a - b).into(), "{a} - {b}");
+        assert_eq!(LooseShorts::<10>::from(a) * b.into(), (a * b).into(), "{a} * {b}");
+        if b > 0 {
+            assert_eq!(LooseShorts::<10>::from(a) / b.into(), (a / b).into(), "{a} / {b}");
+        }
+    }
+}
+
+#[test]
+fn fuzzy_loose_words_tests() {
+    for (a, b) in test_pairs!([i8; 1000], [i16; 2000], [i32; 4000], [i64; 8000]) {
+        assert_eq!(LooseWords::<10>::from(a) + b.into(), (a + b).into(), "{a} + {b}");
+        assert_eq!(LooseWords::<10>::from(a) - b.into(), (a - b).into(), "{a} - {b}");
+        assert_eq!(LooseWords::<10>::from(a) * b.into(), (a * b).into(), "{a} * {b}");
+        if b > 0 {
+            assert_eq!(LooseWords::<10>::from(a) / b.into(), (a / b).into(), "{a} / {b}");
+        }
+    }
+}

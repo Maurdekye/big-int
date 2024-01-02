@@ -392,6 +392,7 @@ impl<const BASE: usize> From<TightBuilder<BASE>> for Tight<BASE> {
     }
 }
 
+/// Calculate the minimum number of bits required to store a digit in a given base.
 const fn bits_per_digit(base: usize) -> usize {
     let mut bits = 1;
     let mut max_base_of_bits = 2;

@@ -24,12 +24,23 @@ let e: Tight<10> = d.convert();
 assert_eq!(format!("{e}"), "37530075201422313411".to_string());
 ```
 
-This crate contains two primary big int implementations:
-* `Loose<BASE>` - A collection of loosely packed ints representing each digit. 
+This crate contains five primary big int implementations:
+* `LooseBytes<BASE>` - A collection of loosely packed 8-bit byte values representing each digit.
+    Slightly memory inefficient, but with minimal performance overhead. 
+    Capable of representing any base from 2-256.
+* `LooseShorts<BASE>` - A collection of loosely packed 16-bit short values representing each digit.
+    Somewhat memory inefficient, but with minimal performance overhead. 
+    Capable of representing any base from 2-65536.
+* `LooseWords<BASE>` - A collection of loosely packed 32-bit word values representing each digit.
+    Fairly memory inefficient, but with minimal performance overhead. 
+    Capable of representing any base from 2-2^32.
+* `Loose<BASE>` - A collection of loosely packed 64-bit ints representing each digit.
     Very memory inefficient, but with minimal performance overhead.
+    Capable of representing any base from 2-2^64.
 * `Tight<BASE>` - A collection of tightly packed bits representing each digit.
-    Maximally memory efficient; however, the additional indirection adds some performance overhead.
+    Maximally memory efficient, and capable of representing any base from 
+    2-2^64. However, the additional indirection adds some performance overhead.
 
-Ints support most basic arithmetic operations, including addition, subtraction, multiplication, 
+Ints support most basic arithmetic operations, including addition, subtraction, multiplication,
 division, and left/right shifting. Notably, shifting acts on the `BASE` of the associated number, increasing
 or decreasing the magnitude by powers of `BASE` as opposed to powers of 2.

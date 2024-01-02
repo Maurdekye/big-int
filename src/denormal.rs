@@ -1,5 +1,47 @@
+//! Denormalized numbers.
+//! 
+//! A denormalized number may not be in a consistent form, and may behave in
+//! unexpected ways while performing mathematical operations. It is typically best 
+//! practice to normalize a denormalized number before using it in other contexts.
+//! 
+//! Sometimes, however, maintaining a number in a denormalized state is desirable for 
+//! one reason or another; for example, performing normalization is a nonzero performance
+//! cost; you may save some computation by performing several consecutive operations in a row
+//! on a denormalized number before finally normalizing it at the end. Additionally, trailing
+//! zeros may be desirable to maintain, for data manipulation purposes.
+//! 
+//! ```
+//! use big_int::prelude::*;
+//! 
+//! let a: Tight<10> = 194.into();
+//! let a: DenormalTight<10> = a.sub_inner::<Tight<10>, Tight<10>>(100.into());
+//! assert_eq!(format!("{a}"), "094".to_string());
+//! let a: Tight<10> = a.unwrap();
+//! assert_eq!(format!("{a}"), "94".to_string());
+//! ```
 use crate::*;
 
+/// Represents a denormalized number.
+/// 
+/// A denormalized number may not be in a consistent form, and may behave in
+/// unexpected ways while performing mathematical operations. It is typically best 
+/// practice to normalize a denormalized number before using it in other contexts.
+/// 
+/// Sometimes, however, maintaining a number in a denormalized state is desirable for 
+/// one reason or another; for example, performing normalization is a nonzero performance
+/// cost; you may save some computation by performing several consecutive operations in a row
+/// on a denormalized number before finally normalizing it at the end. Additionally, trailing
+/// zeros may be desirable to maintain, for data manipulation purposes.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// 
+/// let a: Tight<10> = 194.into();
+/// let a: DenormalTight<10> = a.sub_inner::<Tight<10>, Tight<10>>(100.into());
+/// assert_eq!(format!("{a}"), "094".to_string());
+/// let a: Tight<10> = a.unwrap();
+/// assert_eq!(format!("{a}"), "94".to_string());
+/// ```
 #[derive(Debug, Clone)]
 pub struct Denormal<const BASE: usize, B: BigInt<{ BASE }>>(pub(crate) B);
 
@@ -410,6 +452,10 @@ int_conversions!(
     )
 );
 
+/// A builder for a denormal int.
+/// 
+/// Exists purely clerically as a consequence of the abstractions present. Unlikely
+/// to be used directly.
 #[derive(Debug, Clone)]
 pub struct DenormalBuilder<const BASE: usize, B: BigIntBuilder<{ BASE }>>(B);
 

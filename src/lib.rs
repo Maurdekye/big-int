@@ -22,11 +22,22 @@
 //! assert_eq!(format!("{e}"), "37530075201422313411".to_string());
 //! ```
 //!
-//! This crate contains two primary big int implementations:
-//! * `Loose<BASE>` - A collection of loosely packed ints representing each digit.
+//! This crate contains five primary big int implementations:
+//! * `LooseBytes<BASE>` - A collection of loosely packed 8-bit byte values representing each digit.
+//!     Slightly memory inefficient, but with minimal performance overhead. 
+//!     Capable of representing any base from 2-256.
+//! * `LooseShorts<BASE>` - A collection of loosely packed 16-bit short values representing each digit.
+//!     Somewhat memory inefficient, but with minimal performance overhead. 
+//!     Capable of representing any base from 2-65536.
+//! * `LooseWords<BASE>` - A collection of loosely packed 32-bit word values representing each digit.
+//!     Fairly memory inefficient, but with minimal performance overhead. 
+//!     Capable of representing any base from 2-2^32.
+//! * `Loose<BASE>` - A collection of loosely packed 64-bit ints representing each digit.
 //!     Very memory inefficient, but with minimal performance overhead.
+//!     Capable of representing any base from 2-2^64.
 //! * `Tight<BASE>` - A collection of tightly packed bits representing each digit.
-//!     Maximally memory efficient; however, the additional indirection adds some performance overhead.
+//!     Maximally memory efficient, and capable of representing any base from 
+//!     2-2^64. However, the additional indirection adds some performance overhead.
 //!
 //! Ints support most basic arithmetic operations, including addition, subtraction, multiplication,
 //! division, and left/right shifting. Notably, shifting acts on the `BASE` of the associated number, increasing
@@ -1007,7 +1018,7 @@ where
     /// ```
     /// use big_int::prelude::*;
     ///
-    /// let a: DenormalTight<16> = Loose::<10>::from(99825).convert_inner();
+    /// let a: DenormalTight<16> = Loose::<10>::from(99825).convert_inner::<16, Tight<16>>();
     /// assert_eq!(a, DenormalTight::<16>::from(99825));
     /// ```
     fn convert_inner<const TO: usize, OUT: BigInt<{ TO }>>(mut self) -> OUT::Denormal {
