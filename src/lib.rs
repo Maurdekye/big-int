@@ -669,7 +669,7 @@ where
     /// use big_int::prelude::*;
     ///
     /// let mut a: Tight<10> = 6.into();
-    /// unsafe { 
+    /// unsafe {
     ///     a.push_front(1);
     /// }
     /// assert_eq!(a.normalized(), 16.into());
@@ -921,14 +921,14 @@ where
     }
 
     /// Divide one int by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero.
+    /// or an error if dividing by zero. Returns the result as a denormalized pair.
     ///
     /// ```
     /// use big_int::prelude::*;
     ///
     /// let a: Loose<10> = 999_999_999.into();
     /// let b: Loose<10> = 56_789.into();
-    /// assert_eq!(a.div_rem::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
+    /// assert_eq!(a.div_rem_inner::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
     /// ```
     fn div_rem_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         mut self,
@@ -982,21 +982,33 @@ where
         Ok((quot.with_sign(sign).into(), rem))
     }
 
-    fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
-        self,
-        rhs: RHS,
-    ) -> Result<(OUT, OUT), BigIntError> {
-        self.div_rem_inner::<RHS, OUT>(rhs).map(|(q, r): (OUT::Denormal, OUT::Denormal)| (q.unwrap(), r.unwrap()))
-    }
-
-    /// Convert an int from its own base to another target base,
-    /// to another `BigInt` type, or both at once.
+    /// Divide one int by another, returning the quotient & remainder as a pair,
+    /// or an error if dividing by zero.
     ///
     /// ```
     /// use big_int::prelude::*;
     ///
-    /// let a: Tight<16> = Loose::<10>::from(99825).convert();
-    /// assert_eq!(a, Tight::<16>::from(99825));
+    /// let a: Loose<10> = 999_999_999.into();
+    /// let b: Loose<10> = 56_789.into();
+    /// assert_eq!(a.div_rem::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
+    /// ```
+    fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<(OUT, OUT), BigIntError> {
+        self.div_rem_inner::<RHS, OUT>(rhs)
+            .map(|(q, r): (OUT::Denormal, OUT::Denormal)| (q.unwrap(), r.unwrap()))
+    }
+
+    /// Convert an int from its own base to another target base,
+    /// to another `BigInt` type, or both at once. Returns the result as
+    /// a denormalized number.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: DenormalTight<16> = Loose::<10>::from(99825).convert_inner();
+    /// assert_eq!(a, DenormalTight::<16>::from(99825));
     /// ```
     fn convert_inner<const TO: usize, OUT: BigInt<{ TO }>>(mut self) -> OUT::Denormal {
         let to = TO as Digit;
@@ -1065,6 +1077,16 @@ where
         result.with_sign(sign).into()
     }
 
+
+    /// Convert an int from its own base to another target base,
+    /// to another `BigInt` type, or both at once.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Tight<16> = Loose::<10>::from(99825).convert();
+    /// assert_eq!(a, Tight::<16>::from(99825));
+    /// ```
     fn convert<const TO: usize, OUT: BigInt<{ TO }>>(self) -> OUT {
         self.convert_inner::<TO, OUT>().unwrap()
     }
@@ -1182,6 +1204,14 @@ where
     fn with_sign(self, sign: Sign) -> Self;
 }
 
+/// A conversion that may only be performed unsafely.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// 
+/// let a: Tight<10> = unsafe { Tight::<10>::from_u128_inner(532).unsafe_into() };
+/// assert_eq!(a, 532.into());
+/// ```
 pub trait UnsafeInto<T> {
     unsafe fn unsafe_into(self) -> T;
 }
@@ -1192,6 +1222,17 @@ impl<T> UnsafeInto<T> for T {
     }
 }
 
+/// A value that may be unwrapped.
+/// 
+/// ```
+/// use big_int::prelude::*;
+/// 
+/// let a: Tight<10> = 120.into();
+/// let b: Tight<10> = 5.into();
+/// let b: DenormalTight<10> = a.div_inner::<_, Tight<10>>(b);
+/// let c: Tight<10> = b.unwrap();
+/// assert_eq!(c, 24.into());
+/// ```
 pub trait Unwrap<T> {
     fn unwrap(self) -> T;
 }

@@ -20,6 +20,7 @@ use big_int_proc::BigIntTraits;
 use crate::prelude::*;
 use std::{collections::VecDeque, vec};
 
+/// Shorthand for a denormalized loose int.
 pub type DenormalLoose<const BASE: usize> = Denormal<BASE, Loose<BASE>>;
 
 /// A loosely-packed arbitrary base big int implementation. 

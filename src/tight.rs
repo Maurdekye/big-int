@@ -30,6 +30,7 @@ pub type Datum = u8;
 /// Size of the chosen datum unit, in bits.
 pub const DATUM_SIZE: usize = std::mem::size_of::<Datum>() * 8;
 
+/// Shorthand for a denormalized loose int.
 pub type DenormalTight<const BASE: usize> = Denormal<BASE, Tight<BASE>>;
 
 /// A tightly-packed arbitrary base big int implementation.

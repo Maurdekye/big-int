@@ -196,19 +196,20 @@ fn as_rev_iter() {
     assert_eq!(v, vec![2, 2, 5, 4, 3, 1]);
 }
 
-// macro_rules! base_conv_print {
-//     ($d:expr; $($b:literal),*) => {
-//         let a: Tight<256> = $d.into();
-//         printbytes!(a.data);
-//         $(
-//             let a: Tight<$b> = a.convert();
-//             println!("{}: ", $b);
-//             printbytes!(a.data);
-//         )*
-//     };
-// }
+#[test]
+fn unwrap() {
+    let a: Tight<10> = 120.into();
+    let b: Tight<10> = 5.into();
+    let b: DenormalTight<10> = a.div_inner::<_, Tight<10>>(b);
+    let c: Tight<10> = b.unwrap();
+    assert!(c == 24.into());
+}
 
-// #[test]
-// fn conversion_3() {
-//     base_conv_print!([255, 0, 0, 0]; 128, 64, 32, 16, 8, 4, 2);
-// }
+#[test]
+fn unwrap_2() {
+    let a: Loose<10> = 120.into();
+    let b: Loose<10> = 5.into();
+    let b: DenormalLoose<10> = a.div_inner::<_, Loose<10>>(b);
+    let c: Loose<10> = b.unwrap();
+    assert_eq!(c, 24.into());
+}
