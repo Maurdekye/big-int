@@ -1110,7 +1110,7 @@ where
 /// a.push_back(3);
 /// a.push_back(0);
 /// a.push_back(4);
-/// let a: Tight<10> = a.build();
+/// let a: Tight<10> = a.into();
 /// assert_eq!(a, 5304.into());
 /// ```
 pub trait BigIntBuilder<const BASE: usize>
@@ -1126,7 +1126,6 @@ where
     /// unsafe {
     ///     a.push_back(5);
     /// }
-    /// let a: DenormalTight<10> = a.into();
     /// let a: Tight<10> = a.into();
     /// assert_eq!(a, 5.into());
     /// ```
@@ -1140,7 +1139,8 @@ where
     /// let mut a = TightBuilder::<10>::new();
     /// a.push_back(5);
     /// a.push_back(6);
-    /// assert_eq!(a.build(), 56.into());
+    /// let a: Tight<10> = a.into();
+    /// assert_eq!(a, 56.into());
     /// ```
     fn push_front(&mut self, digit: Digit);
 
@@ -1152,7 +1152,8 @@ where
     /// let mut a = TightBuilder::<10>::new();
     /// a.push_front(5);
     /// a.push_front(6);
-    /// assert_eq!(a.build(), 65.into());
+    /// let a: Tight<10> = a.into();
+    /// assert_eq!(a, 65.into());
     /// ```
     fn push_back(&mut self, digit: Digit);
 
@@ -1175,7 +1176,8 @@ where
     ///
     /// let mut a = TightBuilder::<10>::new();
     /// a.push_back(9);
-    /// assert_eq!(a.with_sign(Negative).build(), (-9).into());
+    /// let a: Tight<10> = a.with_sign(Negative).into();
+    /// assert_eq!(a, (-9).into());
     /// ```
     fn with_sign(self, sign: Sign) -> Self;
 }

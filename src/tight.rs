@@ -6,8 +6,10 @@
 //! let mut a: Tight<10> = 13.into();
 //! a *= 500.into();
 //! assert_eq!(a, 6500.into());
-//!
-//! a.shr_assign_inner(2);
+//! 
+//! unsafe {
+//!     a.shr_assign_inner(2);
+//! }
 //! a += 17.into();
 //! assert_eq!(a, 82.into());
 //! ```
@@ -343,7 +345,7 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
 /// a.push_back(3);
 /// a.push_back(0);
 /// a.push_back(4);
-/// let a: Tight<10> = a.build();
+/// let a: Tight<10> = a.into();
 /// assert_eq!(a, 5304.into());
 /// ```
 #[derive(Debug)]

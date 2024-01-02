@@ -143,8 +143,7 @@ fn get_digit() {
     builder.push_front(3);
     builder.push_front(2);
     builder.push_front(1);
-    let denormal: DenormalTight<10> = builder.into();
-    let int: Tight<10> = denormal.unwrap();
+    let int: Tight<10> = builder.into();
     assert_eq!(int.get_digit(0), Some(1));
     assert_eq!(int.get_digit(1), Some(2));
     assert_eq!(int.get_digit(2), Some(3));
@@ -159,8 +158,7 @@ fn set_digit() {
     builder.push_back(2);
     builder.push_back(3);
     builder.push_back(4);
-    let denormal: DenormalTight<10> = builder.into();
-    let mut int: Tight<10> = denormal.unwrap();
+    let mut int: Tight<10> = builder.into();
     int.set_digit(1, 8);
     int.set_digit(2, 0);
     assert_eq!(int.get_digit(0), Some(1));
