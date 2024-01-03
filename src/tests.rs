@@ -121,20 +121,69 @@ fn exp_3() {
 
 #[test]
 fn exp_4() {
-    let a: Tight<10> = 216.into();
-    let b: Tight<10> = a.exp::<Tight<10>, Tight<10>>(1.into()).unwrap();
+    let a: Loose<10> = 216.into();
+    let b: Loose<10> = a.exp::<Loose<10>, Loose<10>>(1.into()).unwrap();
     assert_eq!(b, 216.into());
+}
+
+#[test]
+fn exp_5() {
+    let a: Tight<10> = 180.into();
+    let b: Tight<10> = a.exp::<Tight<10>, Tight<10>>(31.into()).unwrap();
+    assert_eq!(b, "8193088729422601264042868660091821752320000000000000000000000000000000".parse().unwrap());
 }
 
 #[test]
 fn fuzzy_exp() {
     for (a, b) in test_pairs!([u8; 100], [u16; 1000]) {
-        let b = b.min(0) % 32;
+        let b = b.max(0) % 32;
         let base: Tight<10> = a.into();
         let mut result: Tight<10> = 1.into();
         for _ in 0..b {
             result *= base.clone();
         }
         assert_eq!(base.exp::<Tight<10>, Tight<10>>(b.into()).unwrap(), result, "{a} ^ {b}");
+    }
+}
+
+#[test]
+fn log() {
+    let a: Loose<10> = 1000.into();
+    let b: Loose<10> = a.log::<Loose<10>, Loose<10>>(10.into()).unwrap();
+    assert_eq!(b, 3.into());
+}
+
+#[test]
+fn log_2() {
+    let a: Loose<10> = 100_000_000_000_000_000_000_u128.into();
+    let b: Loose<10> = a.log::<Loose<10>, Loose<10>>(10.into()).unwrap();
+    assert_eq!(b, 20.into());
+}
+
+#[test]
+fn log_3() {
+    let a: Loose<10> = "1840304903118662555886854371754653402172820247670630063406265913840381".parse().unwrap();
+    let b: Loose<10> = a.log::<Loose<10>, Loose<10>>(4421.into()).unwrap();
+    assert_eq!(b, 19.into());
+}
+
+#[test]
+fn log_4() {
+    let a: Loose<10> = "158456325028528675187087900672".parse().unwrap();
+    let b: Loose<10> = a.log::<Loose<10>, Loose<10>>(2.into()).unwrap();
+    assert_eq!(b, 97.into());
+}
+
+#[test]
+fn fuzzy_log() {
+    for (a, b) in test_pairs!([u8; 100], [u16; 1000]) {
+        let b = (b.max(0) % 32).max(2);
+        let base = a.abs().max(1);
+        let mut result: LooseBytes<10> = 1.into();
+        for _ in 0..base {
+            result *= b.into();
+        }
+        // sdbg!((&result, &b, &base));
+        assert_eq!(result.clone().log::<LooseBytes<10>, LooseBytes<10>>(b.into()).unwrap(), base.into(), "log({result})_{b} = {base}");
     }
 }

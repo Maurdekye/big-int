@@ -49,7 +49,7 @@ use std::{
     cmp::Ordering,
     fmt::Display,
     ops::{
-        Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Shl, ShlAssign, Shr,
+        Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr,
         ShrAssign, Sub, SubAssign,
     },
     str::FromStr,
@@ -803,16 +803,19 @@ where
     }
 
     /// Exponentiate the big int by `rhs`.
-    fn exp_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, mut rhs: RHS) -> Result<OUT::Denormal, BigIntError> {
+    fn exp_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        mut rhs: RHS,
+    ) -> Result<OUT::Denormal, BigIntError> {
         if rhs.sign() == Negative {
-            return Err(BigIntError::NegativeExponentiation)
+            return Err(BigIntError::NegativeExponentiation);
         }
         let mut mullands = MullandSet::from(self).memo();
         let mut max_mulland = 0;
         let mut max_mulland_tetrand: RHS = 1.into();
         let mut mulland_tetrands: Vec<RHS> = vec![];
         let mut result: OUT = 1.into();
-        while rhs > max_mulland_tetrand {
+        while rhs >= max_mulland_tetrand {
             rhs -= max_mulland_tetrand.clone();
             unsafe {
                 result.mul_assign_inner(mullands.get(max_mulland).unwrap().clone());
@@ -823,27 +826,106 @@ where
         }
         mulland_tetrands.push(max_mulland_tetrand);
         for (mulland_index, mulland_tetrand) in mulland_tetrands.into_iter().enumerate().rev() {
-            if rhs >= mulland_tetrand {
+            let comparison = rhs.cmp_inner(&mulland_tetrand);
+            if comparison.is_ge() {
                 rhs -= mulland_tetrand;
                 unsafe {
                     result.mul_assign_inner(mullands.get(mulland_index).unwrap().clone());
+                }
+                if comparison.is_eq() {
+                    break;
                 }
             }
         }
         Ok(result.into())
     }
 
-    fn exp<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> Result<OUT, BigIntError> {
+    fn exp<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT, BigIntError> {
         self.exp_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
     }
 
-    fn log_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
-        
-        todo!()
+    fn log_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT::Denormal, BigIntError> {
+        // sdbg!(&self);
+        // sdbg!(&rhs);
+        if self <= Self::zero() {
+            return Err(BigIntError::NonPositiveLogarithm);
+        }
+        if rhs <= 1.into() {
+            return Err(BigIntError::LogOfSmallBase);
+        }
+        let mut mullands = MullandSet::from(rhs).memo();
+        let mut max_mulland = 0;
+        let mut max_mulland_tetrand: OUT = 1.into();
+        let mut mulland_tetrands: Vec<OUT> = vec![];
+        let mut base: Self = 1.into();
+        let mut exp = OUT::zero();
+        // sdbg!(&base);
+        // sdbg!(&exp);
+        let result = 'outer: {
+            loop {
+                let next_base: Self = unsafe {
+                    base.clone()
+                        .mul_inner::<RHS, Self>(mullands.get(max_mulland).unwrap().clone())
+                        .unsafe_into()
+                };
+                let comparison = next_base.cmp_inner(&self);
+                // sdbg!(&next_base);
+                // sdbg!(&comparison);
+                if comparison.is_le() {
+                    exp += max_mulland_tetrand.clone();
+                    // sdbg!(&exp);
+                    base = next_base;
+                    max_mulland += 1;
+                    mulland_tetrands.push(max_mulland_tetrand.clone());
+                    max_mulland_tetrand += max_mulland_tetrand.clone();
+                    // sdbg!(&base);
+                    // sdbg!(&max_mulland);
+                    // sdbg!(&mulland_tetrands);
+                    // sdbg!(&max_mulland_tetrand);
+                }
+                if comparison.is_ge() {
+                    break;
+                }
+            }
+            mulland_tetrands.push(max_mulland_tetrand);
+            // sdbg!(&mulland_tetrands);
+            for (mulland_index, mulland_tetrand) in mulland_tetrands.into_iter().enumerate().rev() {
+                let next_base: Self = unsafe {
+                    base.clone()
+                        .mul_inner::<RHS, Self>(mullands.get(mulland_index).unwrap().clone())
+                        .unsafe_into()
+                };
+                let comparison = next_base.cmp_inner(&self);
+                // sdbg!(&mulland_index);
+                // sdbg!(&mulland_tetrand);
+                // sdbg!(&next_base);
+                // sdbg!(&comparison);
+                if comparison.is_le() {
+                    exp += mulland_tetrand.clone();
+                    // sdbg!(&exp);
+                    if comparison.is_eq() {
+                        break 'outer exp;
+                    }
+                    base = next_base;
+                    // sdbg!(&base);
+                }
+            }
+            exp
+        };
+        Ok(result.into())
     }
 
-    fn log<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT {
-        self.log_inner::<RHS, OUT>(rhs).unwrap()
+    fn log<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT, BigIntError> {
+        self.log_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
     }
 
     fn root_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {

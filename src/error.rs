@@ -13,6 +13,10 @@ pub enum BigIntError {
     DivisionByZero,
     #[error("exponentiation with negative exponent")]
     NegativeExponentiation,
+    #[error("logarithm of non positive number")]
+    NonPositiveLogarithm,
+    #[error("logarithm with base < 2")]
+    LogOfSmallBase,
 }
 
 /// Represents an error with regards to a big int parsing operation.

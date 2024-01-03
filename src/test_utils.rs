@@ -1,6 +1,6 @@
 //! Various utility macros for testing.
 
-/// Create a list of pairs of randomly generated ints, constrained 
+/// Create a list of pairs of randomly generated ints, constrained
 /// by the sizes of the associated int types passed.
 #[macro_export(local_inner_macros)]
 macro_rules! test_pairs {
@@ -14,13 +14,13 @@ macro_rules! test_pairs {
     };
 }
 
-/// Create a list of randomly generated ints, constrained 
+/// Create a list of randomly generated ints, constrained
 /// by the sizes of the associated int types passed.
 #[macro_export(local_inner_macros)]
 macro_rules! test_values {
     ($([$t:ty; $n:literal]),*) => {
         {
-            ::std::iter::empty()$(.chain((0..$n).map(|_| 
+            ::std::iter::empty()$(.chain((0..$n).map(|_|
                 ::rand::random::<$t>() as i128,
             )))*
         }
@@ -31,6 +31,28 @@ macro_rules! test_values {
 #[macro_export(local_inner_macros)]
 macro_rules! bytestr {
     ($d:expr) => {
-        $d.iter().map(|d| format!("{d:08b}")).collect::<Vec<_>>().join(" ");
-    }
+        $d.iter()
+            .map(|d| format!("{d:08b}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+    };
+}
+
+/// dbg! but don't multiline-print
+#[macro_export(local_inner_macros)]
+macro_rules! sdbg {
+    ($val:expr) => {
+        match $val {
+            tmp => {
+                ::std::eprintln!(
+                    "[{}:{}] {} = {:?}",
+                    ::std::file!(),
+                    ::std::line!(),
+                    ::std::stringify!($val),
+                    &tmp
+                );
+                tmp
+            }
+        }
+    };
 }
