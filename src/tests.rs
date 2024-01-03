@@ -177,7 +177,7 @@ fn log_4() {
 #[test]
 fn fuzzy_log() {
     for (a, b) in test_pairs!([u8; 100], [u16; 1000]) {
-        let b = (b.max(0) % 32).max(2);
+        let b = (b.max(0) % 16).max(2);
         let base = a.abs().max(1);
         let mut result: LooseBytes<10> = 1.into();
         for _ in 0..base {

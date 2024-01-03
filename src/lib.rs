@@ -851,8 +851,6 @@ where
         self,
         rhs: RHS,
     ) -> Result<OUT::Denormal, BigIntError> {
-        // sdbg!(&self);
-        // sdbg!(&rhs);
         if self <= Self::zero() {
             return Err(BigIntError::NonPositiveLogarithm);
         }
@@ -865,8 +863,6 @@ where
         let mut mulland_tetrands: Vec<OUT> = vec![];
         let mut base: Self = 1.into();
         let mut exp = OUT::zero();
-        // sdbg!(&base);
-        // sdbg!(&exp);
         let result = 'outer: {
             loop {
                 let next_base: Self = unsafe {
@@ -875,26 +871,18 @@ where
                         .unsafe_into()
                 };
                 let comparison = next_base.cmp_inner(&self);
-                // sdbg!(&next_base);
-                // sdbg!(&comparison);
                 if comparison.is_le() {
                     exp += max_mulland_tetrand.clone();
-                    // sdbg!(&exp);
                     base = next_base;
                     max_mulland += 1;
                     mulland_tetrands.push(max_mulland_tetrand.clone());
                     max_mulland_tetrand += max_mulland_tetrand.clone();
-                    // sdbg!(&base);
-                    // sdbg!(&max_mulland);
-                    // sdbg!(&mulland_tetrands);
-                    // sdbg!(&max_mulland_tetrand);
                 }
                 if comparison.is_ge() {
                     break;
                 }
             }
             mulland_tetrands.push(max_mulland_tetrand);
-            // sdbg!(&mulland_tetrands);
             for (mulland_index, mulland_tetrand) in mulland_tetrands.into_iter().enumerate().rev() {
                 let next_base: Self = unsafe {
                     base.clone()
@@ -902,18 +890,12 @@ where
                         .unsafe_into()
                 };
                 let comparison = next_base.cmp_inner(&self);
-                // sdbg!(&mulland_index);
-                // sdbg!(&mulland_tetrand);
-                // sdbg!(&next_base);
-                // sdbg!(&comparison);
                 if comparison.is_le() {
                     exp += mulland_tetrand.clone();
-                    // sdbg!(&exp);
                     if comparison.is_eq() {
                         break 'outer exp;
                     }
                     base = next_base;
-                    // sdbg!(&base);
                 }
             }
             exp
@@ -1092,19 +1074,23 @@ where
 
         for _ in 0..quot_digits {
             let mut digit_value = 0;
-            for power in (0..addends.len()).rev() {
+            let mut index = 0;
+            let mut power = 1;
+            while power < BASE as Digit {
                 let new_prod = unsafe {
                     prod.clone()
-                        .add_inner::<_, Self>(addends.get(power).unwrap().clone())
+                        .add_inner::<_, Self>(addends.get(index).unwrap().clone())
                         .unsafe_into()
                 };
                 if new_prod <= self {
-                    digit_value += 1 << power;
+                    digit_value += power;
                     prod = new_prod;
                 }
                 unsafe {
-                    addends.get_mut(power).unwrap().shr_assign_inner(1);
+                    addends.get_mut(index).unwrap().shr_assign_inner(1);
                 }
+                power <<= 1;
+                index += 1;
             }
             quot.push_back(digit_value);
         }
@@ -1253,9 +1239,10 @@ where
 }
 
 /// Prepare a set of addends.
+/// 
+/// In an addend set, each element is 2x the element before it.
 ///
-/// Used internally for efficient arithmetic algorithms. Not intended
-/// to be used directly.
+/// Used internally for efficient multiplication & division algorithms.
 struct AddendSet<const BASE: usize, B: BigInt<{ BASE }>> {
     power: usize,
     addend: B,
@@ -1274,21 +1261,18 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for AddendSet<BASE, B> {
     type Item = B;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.power >= BASE {
-            None
-        } else {
-            let next_addend = self.addend.clone();
-            self.addend += self.addend.clone();
-            self.power <<= 1;
-            Some(next_addend)
-        }
+        let next_addend = self.addend.clone();
+        self.addend += self.addend.clone();
+        self.power <<= 1;
+        Some(next_addend)
     }
 }
 
 /// Prepare a set of mullands.
+/// 
+/// In a mulland set, each element is the square of the element before it.
 ///
-/// Used internally for efficient arithmetic algorithms. Not intended
-/// to be used directly.
+/// Used internally for efficient exponentiation, logarithm, and nth root algorithms.
 struct MullandSet<const BASE: usize, B: BigInt<{ BASE }>> {
     tetrand: usize,
     mulland: B,
@@ -1337,14 +1321,6 @@ impl<I: Iterator> IterMemo<I> {
             self.store_next();
         }
         self.memo.get_mut(index)
-    }
-
-    /// Get the total number of elements. Requires exhausting the memo.
-    fn len(&mut self) -> usize {
-        while !self.exhausted {
-            self.store_next();
-        }
-        self.memo.len()
     }
 
     fn store_next(&mut self) {
