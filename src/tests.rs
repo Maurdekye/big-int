@@ -97,3 +97,44 @@ fn convert_4() {
 fn is_power() {
     assert_eq!(big_int::is_power(10, 2), None);
 }
+
+#[test]
+fn exp() {
+    let a: Loose<10> = 10.into();
+    let b: Loose<10> = a.exp::<Loose<10>, Loose<10>>(3.into()).unwrap();
+    assert_eq!(b, 1000.into());
+}
+
+#[test]
+fn exp_2() {
+    let a: Loose<10> = 10.into();
+    let b: Loose<10> = a.exp::<Loose<10>, Loose<10>>(20.into()).unwrap();
+    assert_eq!(b, 100_000_000_000_000_000_000_u128.into());
+}
+
+#[test]
+fn exp_3() {
+    let a: Loose<10> = 4421.into();
+    let b: Loose<10> = a.exp::<Loose<10>, Loose<10>>(19.into()).unwrap();
+    assert_eq!(b, "1840304903118662555886854371754653402172820247670630063406265913840381".parse().unwrap());
+}
+
+#[test]
+fn exp_4() {
+    let a: Tight<10> = 216.into();
+    let b: Tight<10> = a.exp::<Tight<10>, Tight<10>>(1.into()).unwrap();
+    assert_eq!(b, 216.into());
+}
+
+#[test]
+fn fuzzy_exp() {
+    for (a, b) in test_pairs!([u8; 100], [u16; 1000]) {
+        let b = b.min(0) % 32;
+        let base: Tight<10> = a.into();
+        let mut result: Tight<10> = 1.into();
+        for _ in 0..b {
+            result *= base.clone();
+        }
+        assert_eq!(base.exp::<Tight<10>, Tight<10>>(b.into()).unwrap(), result, "{a} ^ {b}");
+    }
+}

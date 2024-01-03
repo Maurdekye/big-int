@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "big-int"
-version = "5.0.1"
+version = "5.1.0"
 dependencies = [
  "big-int-proc",
  "rand",

@@ -11,6 +11,8 @@ pub enum BigIntError {
     ParseFailed(ParseError),
     #[error("division by zero")]
     DivisionByZero,
+    #[error("exponentiation with negative exponent")]
+    NegativeExponentiation,
 }
 
 /// Represents an error with regards to a big int parsing operation.

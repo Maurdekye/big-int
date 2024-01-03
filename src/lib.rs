@@ -24,19 +24,19 @@
 //!
 //! This crate contains five primary big int implementations:
 //! * `LooseBytes<BASE>` - A collection of loosely packed 8-bit byte values representing each digit.
-//!     Slightly memory inefficient, but with minimal performance overhead. 
+//!     Slightly memory inefficient, but with minimal performance overhead.
 //!     Capable of representing any base from 2-256.
 //! * `LooseShorts<BASE>` - A collection of loosely packed 16-bit short values representing each digit.
-//!     Somewhat memory inefficient, but with minimal performance overhead. 
+//!     Somewhat memory inefficient, but with minimal performance overhead.
 //!     Capable of representing any base from 2-65536.
 //! * `LooseWords<BASE>` - A collection of loosely packed 32-bit word values representing each digit.
-//!     Fairly memory inefficient, but with minimal performance overhead. 
+//!     Fairly memory inefficient, but with minimal performance overhead.
 //!     Capable of representing any base from 2-2^32.
 //! * `Loose<BASE>` - A collection of loosely packed 64-bit ints representing each digit.
 //!     Very memory inefficient, but with minimal performance overhead.
 //!     Capable of representing any base from 2-2^64.
 //! * `Tight<BASE>` - A collection of tightly packed bits representing each digit.
-//!     Maximally memory efficient, and capable of representing any base from 
+//!     Maximally memory efficient, and capable of representing any base from
 //!     2-2^64. However, the additional indirection adds some performance overhead.
 //!
 //! Ints support most basic arithmetic operations, including addition, subtraction, multiplication,
@@ -49,8 +49,8 @@ use std::{
     cmp::Ordering,
     fmt::Display,
     ops::{
-        Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, ShrAssign, Sub,
-        SubAssign,
+        Add, AddAssign, Div, DivAssign, Index, IndexMut, Mul, MulAssign, Neg, Shl, ShlAssign, Shr,
+        ShrAssign, Sub, SubAssign,
     },
     str::FromStr,
 };
@@ -419,22 +419,19 @@ where
         self.set_sign(Positive);
         rhs.set_sign(Positive);
         let mut result = OUT::zero();
-        let mut addend = rhs.clone();
-        let mut addends = Vec::new();
-        let mut power = 1;
-        while power < BASE {
-            addends.push(addend.clone());
-            addend += addend.clone();
-            power <<= 1;
-        }
+        let mut addends = AddendSet::from(rhs.clone()).memo();
         for digit in self.rev() {
-            for i in 0..addends.len() {
-                if digit & (1 << i) != 0 {
+            let mut power = 1;
+            let mut index = 0;
+            while power < BASE as u64 {
+                if digit & power != 0 {
                     unsafe {
-                        result.add_assign_inner(addends[i].clone());
+                        result.add_assign_inner(addends.get(index).unwrap().clone());
                     }
                 }
-                addends[i].shl_assign_inner(1);
+                addends.get_mut(index).unwrap().shl_assign_inner(1);
+                power <<= 1;
+                index += 1;
             }
         }
         result.with_sign(sign).into()
@@ -805,6 +802,58 @@ where
         *self = self.clone().shl_inner(amount);
     }
 
+    /// Exponentiate the big int by `rhs`.
+    fn exp_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, mut rhs: RHS) -> Result<OUT::Denormal, BigIntError> {
+        if rhs.sign() == Negative {
+            return Err(BigIntError::NegativeExponentiation)
+        }
+        let mut mullands = MullandSet::from(self).memo();
+        let mut max_mulland = 0;
+        let mut max_mulland_tetrand: RHS = 1.into();
+        let mut mulland_tetrands: Vec<RHS> = vec![];
+        let mut result: OUT = 1.into();
+        while rhs > max_mulland_tetrand {
+            rhs -= max_mulland_tetrand.clone();
+            unsafe {
+                result.mul_assign_inner(mullands.get(max_mulland).unwrap().clone());
+            }
+            max_mulland += 1;
+            mulland_tetrands.push(max_mulland_tetrand.clone());
+            max_mulland_tetrand += max_mulland_tetrand.clone();
+        }
+        mulland_tetrands.push(max_mulland_tetrand);
+        for (mulland_index, mulland_tetrand) in mulland_tetrands.into_iter().enumerate().rev() {
+            if rhs >= mulland_tetrand {
+                rhs -= mulland_tetrand;
+                unsafe {
+                    result.mul_assign_inner(mullands.get(mulland_index).unwrap().clone());
+                }
+            }
+        }
+        Ok(result.into())
+    }
+
+    fn exp<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> Result<OUT, BigIntError> {
+        self.exp_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
+    }
+
+    fn log_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
+        
+        todo!()
+    }
+
+    fn log<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT {
+        self.log_inner::<RHS, OUT>(rhs).unwrap()
+    }
+
+    fn root_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
+        todo!()
+    }
+
+    fn root<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT {
+        self.root_inner::<RHS, OUT>(rhs).unwrap()
+    }
+
     /// Iterate over the digits of the int.
     ///
     /// implements `DoubleEndedIterator`, so digits can be iterated over forward or in reverse.
@@ -957,21 +1006,14 @@ where
         let quot_digits = self.len() - rhs.len() + 1;
         let mut quot = OUT::Builder::new();
         let mut prod = Self::zero();
-        let mut addend = rhs.clone().shl_inner(quot_digits - 1);
-        let mut addends = Vec::new();
-        let mut power = 1;
-        while power < BASE {
-            addends.push(addend.clone());
-            addend += addend.clone();
-            power <<= 1;
-        }
+        let mut addends = AddendSet::from(rhs.clone().shl_inner(quot_digits - 1)).memo();
 
         for _ in 0..quot_digits {
             let mut digit_value = 0;
             for power in (0..addends.len()).rev() {
                 let new_prod = unsafe {
                     prod.clone()
-                        .add_inner::<_, Self>(addends[power].clone())
+                        .add_inner::<_, Self>(addends.get(power).unwrap().clone())
                         .unsafe_into()
                 };
                 if new_prod <= self {
@@ -979,7 +1021,7 @@ where
                     prod = new_prod;
                 }
                 unsafe {
-                    addends[power].shr_assign_inner(1);
+                    addends.get_mut(power).unwrap().shr_assign_inner(1);
                 }
             }
             quot.push_back(digit_value);
@@ -1088,7 +1130,6 @@ where
         result.with_sign(sign).into()
     }
 
-
     /// Convert an int from its own base to another target base,
     /// to another `BigInt` type, or both at once.
     ///
@@ -1128,6 +1169,131 @@ where
         Ordering::Equal
     }
 }
+
+/// Prepare a set of addends.
+///
+/// Used internally for efficient arithmetic algorithms. Not intended
+/// to be used directly.
+struct AddendSet<const BASE: usize, B: BigInt<{ BASE }>> {
+    power: usize,
+    addend: B,
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> From<B> for AddendSet<BASE, B> {
+    fn from(value: B) -> Self {
+        Self {
+            power: 1,
+            addend: value,
+        }
+    }
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for AddendSet<BASE, B> {
+    type Item = B;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.power >= BASE {
+            None
+        } else {
+            let next_addend = self.addend.clone();
+            self.addend += self.addend.clone();
+            self.power <<= 1;
+            Some(next_addend)
+        }
+    }
+}
+
+/// Prepare a set of mullands.
+///
+/// Used internally for efficient arithmetic algorithms. Not intended
+/// to be used directly.
+struct MullandSet<const BASE: usize, B: BigInt<{ BASE }>> {
+    tetrand: usize,
+    mulland: B,
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> From<B> for MullandSet<BASE, B> {
+    fn from(value: B) -> Self {
+        Self {
+            tetrand: 1,
+            mulland: value,
+        }
+    }
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for MullandSet<BASE, B> {
+    type Item = B;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_mulland = self.mulland.clone();
+        self.mulland *= self.mulland.clone();
+        self.tetrand <<= 1;
+        Some(next_mulland)
+    }
+}
+
+/// A memoized iterator. Remembers elements that were yielded by the
+/// underlying iterator, and allows fetching of them after the fact.
+struct IterMemo<I: Iterator> {
+    memo: Vec<I::Item>,
+    iter: I,
+    exhausted: bool,
+}
+
+impl<I: Iterator> IterMemo<I> {
+    /// Fetch a memoized item from the iterator, pulling new items from it
+    /// as needed.
+    fn get(&mut self, index: usize) -> Option<&I::Item> {
+        while self.memo.len() <= index && !self.exhausted {
+            self.store_next();
+        }
+        self.memo.get(index)
+    }
+
+    fn get_mut(&mut self, index: usize) -> Option<&mut I::Item> {
+        while self.memo.len() <= index && !self.exhausted {
+            self.store_next();
+        }
+        self.memo.get_mut(index)
+    }
+
+    /// Get the total number of elements. Requires exhausting the memo.
+    fn len(&mut self) -> usize {
+        while !self.exhausted {
+            self.store_next();
+        }
+        self.memo.len()
+    }
+
+    fn store_next(&mut self) {
+        if let Some(item) = self.iter.next() {
+            self.memo.push(item);
+        } else {
+            self.exhausted = true;
+        }
+    }
+}
+
+impl<I: Iterator> From<I> for IterMemo<I> {
+    fn from(value: I) -> Self {
+        IterMemo {
+            memo: Vec::new(),
+            iter: value,
+            exhausted: false,
+        }
+    }
+}
+
+/// Transitive trait to allow one to call `.memo()` on iterators
+/// to make a memoizer from them
+trait ToMemo: Iterator + Sized {
+    /// Translate an iterator into a memoized iterator.
+    fn memo(self) -> IterMemo<Self> {
+        self.into()
+    }
+}
+
+impl<I: Iterator> ToMemo for I {}
 
 /// A builder for a big int. Use this to construct a big int one digit at a time,
 /// then call .build() to finalize the builder.
@@ -1216,10 +1382,10 @@ where
 }
 
 /// A conversion that may only be performed unsafely.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let a: Tight<10> = unsafe { Tight::<10>::from_u128_inner(532).unsafe_into() };
 /// assert_eq!(a, 532.into());
 /// ```
@@ -1234,10 +1400,10 @@ impl<T> UnsafeInto<T> for T {
 }
 
 /// A value that may be unwrapped.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let a: Tight<10> = 120.into();
 /// let b: Tight<10> = 5.into();
 /// let b: DenormalTight<10> = a.div_inner::<_, Tight<10>>(b);
