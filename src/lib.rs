@@ -1469,7 +1469,8 @@ where
 ///
 /// In an addend set, each element is 2x the element before it.
 ///
-/// Used internally for efficient multiplication & division algorithms.
+/// Used internally for efficient multiplication, division,
+/// exponentiation, and logarithm algorithms.
 struct AddendSet<const BASE: usize, B: BigInt<{ BASE }>> {
     addend: B,
 }
@@ -1529,9 +1530,9 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for MullandSet<BASE, B> {
 
 /// Prepare a set of n-addends.
 ///
-/// In an n-addend set, each element is `FACTOR` * the element before it.
+/// In an n-addend set, each element is `factor` * the element before it.
 ///
-/// Used internally for efficient nth root algorithms.
+/// Used internally for the efficient square root algorithm.
 struct NAddendSet<const BASE: usize, B: BigInt<{ BASE }>> {
     addend: B,
     factor: B,
