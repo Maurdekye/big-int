@@ -188,7 +188,8 @@ fn as_iter() {
 
 #[test]
 fn as_rev_iter() {
-    let mut a: Tight<10> = 134522.into();
+    let a: Tight<10> = 134522.into();
+    let mut a = a.into_iter();
     let mut v = Vec::new();
     while let Some(digit) = a.next_back() {
         v.push(digit);

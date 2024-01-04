@@ -491,7 +491,7 @@ fn shr() {
 }
 
 #[test]
-fn as_iter() {
+fn into_iter() {
     let a: Loose<10> = 134522.into();
     let mut v = Vec::new();
     for digit in a {
@@ -501,10 +501,10 @@ fn as_iter() {
 }
 
 #[test]
-fn as_rev_iter() {
+fn into_rev_iter() {
     let a: Loose<10> = 134522.into();
     let mut v = Vec::new();
-    for digit in a.rev() {
+    for digit in a.into_iter().rev() {
         v.push(digit);
     }
     assert_eq!(v, vec![2, 2, 5, 4, 3, 1]);

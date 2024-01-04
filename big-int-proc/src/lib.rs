@@ -231,21 +231,12 @@ pub fn auto_big_int_derive(input: TokenStream) -> TokenStream {
             }
         }
 
-        impl #impl_generics ::std::iter::Iterator for #name #ty_generics #where_clause {
+        impl #impl_generics ::std::iter::IntoIterator for #name #ty_generics #where_clause {
             type Item = ::big_int::Digit;
+            type IntoIter = ::big_int::BigIntIntoIter<BASE, Self>;
 
-            fn next(&mut self) -> Option<Self::Item> {
-                unsafe {
-                    <#name #ty_generics as ::big_int::BigInt<BASE>>::next_inner(self)
-                }
-            }
-        }
-
-        impl #impl_generics ::std::iter::DoubleEndedIterator for #name #ty_generics #where_clause {
-            fn next_back(&mut self) -> Option<Self::Item> {
-                unsafe {
-                    <#name #ty_generics as ::big_int::BigInt<BASE>>::next_back_inner(self)
-                }
+            fn into_iter(self) -> Self::IntoIter {
+                ::big_int::BigIntIntoIter(self)
             }
         }
 

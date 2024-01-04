@@ -153,8 +153,7 @@ where
         + ShrAssign
         + FromStr<Err = BigIntError>
         + FromIterator<Digit>
-        + Iterator<Item = Digit>
-        + DoubleEndedIterator<Item = Digit>
+        + IntoIterator<Item = Digit, IntoIter = BigIntIntoIter<BASE, Self>>
         + From<Vec<Digit>>
         + From<u8>
         + From<u16>
@@ -440,7 +439,7 @@ where
         }
         let mut result = OUT::zero();
         let mut addends = rhs.clone().addends().memo();
-        for digit in self.rev() {
+        for digit in self.into_iter().rev() {
             for index in 0..Self::BITS_PER_DIGIT {
                 if digit & (1 << index) != 0 {
                     unsafe {
@@ -506,24 +505,6 @@ where
         builder.into()
     }
 
-    /// Default implementation of `Iterator`.
-    ///
-    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    ///
-    /// If this method is used directly, it may cause the number to become denormalized.
-    unsafe fn next_inner(&mut self) -> Option<Digit> {
-        self.pop_front()
-    }
-
-    /// Default implementation of `DoubleEndedIterator`.
-    ///
-    /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
-    ///
-    /// If this method is used directly, it may cause the number to become denormalized.
-    unsafe fn next_back_inner(&mut self) -> Option<Digit> {
-        self.pop_back()
-    }
-
     /// Default implementation of `From<_>` for all unsigned primitive int types.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
@@ -559,7 +540,7 @@ where
         }
         let mut total: u128 = 0;
         let mut place: u128 = 0;
-        for digit in self.rev() {
+        for digit in self.into_iter().rev() {
             place = if place == 0 { 1 } else { place * BASE as u128 };
             total += (digit as u128) * place;
         }
@@ -573,7 +554,7 @@ where
         let mut total: i128 = 0;
         let mut place: i128 = 0;
         let sign = self.sign();
-        for digit in self.rev() {
+        for digit in self.into_iter().rev() {
             place = if place == 0 { 1 } else { place * BASE as i128 };
             total += (digit as i128) * place;
         }
@@ -1068,73 +1049,144 @@ where
         self.log_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
     }
 
-    /// Compute the square root of the big int.
-    /// Returns the result as a denormalized number.
-    ///
-    /// ### Errors:
-    /// * `NegativeRoot` if the number is negative.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let a: Loose<10> = 100.into();
-    /// assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 10.into());
-    /// ```
-    fn sqrt_inner<OUT: BigInt<{ BASE }>>(self) -> Result<OUT::Denormal, BigIntError> {
-        if self < Self::zero() {
-            return Err(BigIntError::NegativeRoot);
-        }
-        if self.is_zero() {
-            return Ok(OUT::Denormal::zero());
-        }
-        let mut sq_addends = OUT::from(1).n_addends(4.into()).memo();
-        let mut base_addends = OUT::from(1).addends().memo();
-        let mut index = 0;
-        loop {
-            let comparison = sq_addends.get(index + 1).unwrap().cmp_inner(&self);
-            if comparison.is_le() {
-                index += 1;
-                if comparison.is_eq() {
-                    return Ok(base_addends.get(index).unwrap().clone().into());
-                }
-            } else {
-                break;
-            }
-        }
-        let mut square = sq_addends.get(index).unwrap().clone();
-        let mut base = base_addends.get(index).unwrap().clone();
-        for i in (0..index).rev() {
-            let base_addition = base_addends.get(i).unwrap().clone();
-            let sq_addition = sq_addends.get(i).unwrap().clone();
-            let mut middle_part = base.clone() * base_addition.clone();
-            middle_part += middle_part.clone();
-            let new_square = square.clone() + middle_part + sq_addition;
-            let comparison = new_square.cmp_inner(&self);
-            if comparison.is_le() {
-                base += base_addition;
-                if comparison.is_eq() {
-                    break;
-                }
-                square = new_square;
-            }
-        }
-        Ok(base.into())
-    }
 
-    /// Compute the square root of the big int.
-    ///
-    /// ### Errors:
-    /// * `NegativeRoot` if the number is negative.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let a: Loose<10> = 100.into();
-    /// assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 10.into());
-    /// ```
-    fn sqrt<OUT: BigInt<{ BASE }>>(self) -> Result<OUT, BigIntError> {
-        self.sqrt_inner::<OUT>().map(|x| x.unwrap())
-    }
+    // these are actually slower than the generalized function...
+
+    // /// Compute the square root of the big int.
+    // /// Returns the result as a denormalized number.
+    // ///
+    // /// ### Errors:
+    // /// * `NegativeRoot` if the number is negative.
+    // ///
+    // /// ```
+    // /// use big_int::prelude::*;
+    // ///
+    // /// let a: Loose<10> = 100.into();
+    // /// assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 10.into());
+    // /// ```
+    // fn sqrt_inner<OUT: BigInt<{ BASE }>>(self) -> Result<OUT::Denormal, BigIntError> {
+    //     if self < Self::zero() {
+    //         return Err(BigIntError::NegativeRoot);
+    //     }
+    //     if self.is_zero() {
+    //         return Ok(OUT::Denormal::zero());
+    //     }
+    //     let mut sq_addends = OUT::from(1).n_addends(4.into()).memo();
+    //     let mut base_addends = OUT::from(1).addends().memo();
+    //     let mut index = 0;
+    //     loop {
+    //         let comparison = sq_addends.get(index + 1).unwrap().cmp_inner(&self);
+    //         if comparison.is_le() {
+    //             index += 1;
+    //             if comparison.is_eq() {
+    //                 return Ok(base_addends.get(index).unwrap().clone().into());
+    //             }
+    //         } else {
+    //             break;
+    //         }
+    //     }
+    //     let mut square = sq_addends.get(index).unwrap().clone();
+    //     let mut base = base_addends.get(index).unwrap().clone();
+    //     for i in (0..index).rev() {
+    //         let base_addition = base_addends.get(i).unwrap().clone();
+    //         let sq_addition = sq_addends.get(i).unwrap().clone();
+    //         let mut middle_part = base.clone() * base_addition.clone();
+    //         middle_part += middle_part.clone();
+    //         let new_square = square.clone() + middle_part + sq_addition;
+    //         let comparison = new_square.cmp_inner(&self);
+    //         if comparison.is_le() {
+    //             base += base_addition;
+    //             if comparison.is_eq() {
+    //                 break;
+    //             }
+    //             square = new_square;
+    //         }
+    //     }
+    //     Ok(base.into())
+    // }
+
+    // /// Compute the square root of the big int.
+    // ///
+    // /// ### Errors:
+    // /// * `NegativeRoot` if the number is negative.
+    // ///
+    // /// ```
+    // /// use big_int::prelude::*;
+    // ///
+    // /// let a: Loose<10> = 100.into();
+    // /// assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 10.into());
+    // /// ```
+    // fn sqrt<OUT: BigInt<{ BASE }>>(self) -> Result<OUT, BigIntError> {
+    //     self.sqrt_inner::<OUT>().map(|x| x.unwrap())
+    // }
+
+    // /// Compute the cube root of the big int.
+    // /// Returns the result as a denormalized number.
+    // ///
+    // /// ### Errors:
+    // /// * `NegativeRoot` if the number is negative.
+    // ///
+    // /// ```
+    // /// use big_int::prelude::*;
+    // ///
+    // /// let a: Loose<10> = 1000.into();
+    // /// assert_eq!(a.cbrt::<Loose<10>>().unwrap(), 10.into());
+    // /// ```
+    // fn cbrt_inner<OUT: BigInt<{ BASE }>>(self) -> Result<OUT::Denormal, BigIntError> {
+    //     if self < Self::zero() {
+    //         return Err(BigIntError::NegativeRoot);
+    //     }
+    //     if self.is_zero() {
+    //         return Ok(OUT::Denormal::zero());
+    //     }
+    //     let mut cb_addends = OUT::from(1).n_addends(8.into()).memo();
+    //     let mut base_addends = OUT::from(1).addends().memo();
+    //     let mut index = 0;
+    //     loop {
+    //         let comparison = cb_addends.get(index + 1).unwrap().cmp_inner(&self);
+    //         if comparison.is_le() {
+    //             index += 1;
+    //             if comparison.is_eq() {
+    //                 return Ok(base_addends.get(index).unwrap().clone().into());
+    //             }
+    //         } else {
+    //             break;
+    //         }
+    //     }
+    //     let mut cube = cb_addends.get(index).unwrap().clone();
+    //     let mut base = base_addends.get(index).unwrap().clone();
+    //     for i in (0..index).rev() {
+    //         let base_addition = base_addends.get(i).unwrap().clone();
+    //         let base_sq = base.clone() * base.clone();
+    //         let base_addition_sq = base_addition.clone() * base_addition.clone();
+    //         let cb_addition = cb_addends.get(i).unwrap().clone();
+    //         let new_cube = cube.clone() + (base_sq * base_addition.clone() * 3.into()) + (base.clone() * base_addition_sq * 3.into()) + cb_addition;
+    //         let comparison = new_cube.cmp_inner(&self);
+    //         if comparison.is_le() {
+    //             base += base_addition;
+    //             if comparison.is_eq() {
+    //                 break;
+    //             }
+    //             cube = new_cube;
+    //         }
+    //     }
+    //     Ok(base.into())
+    // }
+
+    // /// Compute the cube root of the big int.
+    // ///
+    // /// ### Errors:
+    // /// * `NegativeRoot` if the number is negative.
+    // ///
+    // /// ```
+    // /// use big_int::prelude::*;
+    // ///
+    // /// let a: Loose<10> = 1000.into();
+    // /// assert_eq!(a.cbrt::<Loose<10>>().unwrap(), 10.into());
+    // /// ```
+    // fn cbrt<OUT: BigInt<{ BASE }>>(self) -> Result<OUT, BigIntError> {
+    //     self.cbrt_inner::<OUT>().map(|x| x.unwrap())
+    // }
 
     /// Compute the nth root of the big int, with root `rhs`.
     /// Returns the result as a denormalized number.
@@ -1391,7 +1443,7 @@ where
         // by converting each individual digit from the current number into
         // several contiguous digits of the target number
         } else if let Some(power) = is_power(BASE, TO) {
-            for mut from_digit in self.rev() {
+            for mut from_digit in self.into_iter().rev() {
                 for _ in 0..power {
                     result.push_front(from_digit % to);
                     if from_digit >= to {
@@ -1406,7 +1458,7 @@ where
         // by creating a single digit of the target number from several contiguous digits
         // of the current number
         } else if let Some(power) = is_power(TO, BASE) {
-            let mut iter = self.rev();
+            let mut iter = self.into_iter().rev();
             loop {
                 let mut to_digit = 0;
                 let mut done = false;
@@ -1807,6 +1859,32 @@ impl Mul for Sign {
         } else {
             Negative
         }
+    }
+}
+
+/// A consuming iterator over the digits of a big int.
+///
+/// ```
+/// use big_int::prelude::*;
+/// use std::iter::Rev;
+///
+/// let a: Loose<10> = 12345.into();
+/// let it = a.into_iter();
+/// assert_eq!(it.collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
+/// ```
+pub struct BigIntIntoIter<const BASE: usize, B: BigInt<{ BASE }>>(B);
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for BigIntIntoIter<BASE, B> {
+    type Item = Digit;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe { self.0.pop_front() }
+    }
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> DoubleEndedIterator for BigIntIntoIter<BASE, B> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        unsafe { self.0.pop_back() }
     }
 }
 

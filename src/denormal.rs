@@ -155,10 +155,6 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> BigInt<BASE> for Denormal<BASE, B> 
             .map(|x| unsafe { x.unsafe_into() })
     }
 
-    fn sqrt<OUT: BigInt<{ BASE }>>(self) -> Result<OUT, BigIntError> {
-        self.sqrt_inner::<OUT>().map(|x| unsafe { x.unsafe_into() })
-    }
-
     fn convert<const TO: usize, OUT: BigInt<{ TO }>>(self) -> OUT {
         unsafe { self.convert_inner::<TO, OUT>().unsafe_into() }
     }
@@ -237,14 +233,6 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> BigInt<BASE> for Denormal<BASE, B> 
         unsafe { B::from_iter_inner(iter).unsafe_into() }.into()
     }
 
-    unsafe fn next_inner(&mut self) -> Option<Digit> {
-        self.0.next_inner()
-    }
-
-    unsafe fn next_back_inner(&mut self) -> Option<Digit> {
-        self.0.next_back_inner()
-    }
-
     fn from_u128_inner(value: u128) -> Self::Denormal {
         unsafe { B::from_u128_inner(value).unsafe_into() }.into()
     }
@@ -290,13 +278,7 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> BigInt<BASE> for Denormal<BASE, B> 
             .log_inner::<RHS, OUT>(rhs)
             .map(|x| unsafe { x.unsafe_into() }.into())
     }
-
-    fn sqrt_inner<OUT: BigInt<{ BASE }>>(self) -> Result<OUT::Denormal, BigIntError> {
-        self.0
-            .sqrt_inner::<OUT>()
-            .map(|x| unsafe { x.unsafe_into() }.into())
-    }
-
+    
     fn root_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         rhs: RHS,
@@ -507,19 +489,12 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> ::std::iter::FromIterator<::big_int
     }
 }
 
-impl<const BASE: usize, B: BigInt<{ BASE }>> ::std::iter::Iterator for Denormal<BASE, B> {
+impl<const BASE: usize, B: BigInt<{ BASE }>> ::std::iter::IntoIterator for Denormal<BASE, B> {
     type Item = ::big_int::Digit;
+    type IntoIter = ::big_int::BigIntIntoIter<BASE, Self>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        unsafe { <Denormal<BASE, B> as ::big_int::BigInt<BASE>>::next_inner(self) }
-    }
-}
-
-impl<const BASE: usize, B: BigInt<{ BASE }>> ::std::iter::DoubleEndedIterator
-    for Denormal<BASE, B>
-{
-    fn next_back(&mut self) -> Option<Self::Item> {
-        unsafe { <Denormal<BASE, B> as ::big_int::BigInt<BASE>>::next_back_inner(self) }
+    fn into_iter(self) -> Self::IntoIter {
+        ::big_int::BigIntIntoIter(self)
     }
 }
 
