@@ -488,6 +488,9 @@ where
     /// Default implementation of `FromStr`.
     ///
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
+    /// 
+    /// ### Errors:
+    /// * `ParseFailed` if parsing of the string fails.
     fn from_str_inner(s: &str) -> Result<Self::Denormal, BigIntError> {
         Self::parse(s, STANDARD_ALPHABET).map_err(BigIntError::ParseFailed)
     }
@@ -824,9 +827,12 @@ where
         *self = self.clone().shl_inner(amount).unsafe_into();
     }
 
-    /// Divide one int by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero. Returns the result as a denormalized pair.
+    /// Divide one int by another, returning the quotient & remainder as a pair. 
+    /// Returns the result as a denormalized pair.
     ///
+    /// ### Errors:
+    /// * `DivisionByZero` if `rhs` is zero.
+    /// 
     /// ```
     /// use big_int::prelude::*;
     ///
@@ -891,9 +897,11 @@ where
         Ok((quot.with_sign(sign).into(), rem))
     }
 
-    /// Divide one int by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero.
+    /// Divide one int by another, returning the quotient & remainder as a pair.
     ///
+    /// ### Errors:
+    /// * `DivisionByZero` if `rhs` is zero.
+    /// 
     /// ```
     /// use big_int::prelude::*;
     ///
@@ -912,7 +920,8 @@ where
     /// Exponentiate the big int by `rhs`.
     /// Returns the result as a denormalized number.
     ///
-    /// Will return a `NegativeExponentiation` error if the exponent is negative.
+    /// ### Errors:
+    /// * `NegativeExponentiation` if `rhs` is negative.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -956,7 +965,8 @@ where
 
     /// Exponentiate the big int by `rhs`.
     ///
-    /// Will return a `NegativeExponentiation` error if the exponent is negative.
+    /// ### Errors:
+    /// * `NegativeExponentiation` if `rhs` is negative.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -975,8 +985,9 @@ where
     /// Compute the logarithm of the big int with the base `rhs`.
     /// Returns the result as a denormalized number.
     ///
-    /// Will return a `NonPositiveLogarithm` error if the number is negative, and
-    /// a `LogOfSmallBase` error if the base is less than 2.
+    /// ### Errors:
+    /// * `NonPositiveLogarithm` if the number is less than 1.
+    /// * `LogOfSmallBase` if `rhs` is less than 2.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -1039,8 +1050,9 @@ where
 
     /// Compute the logarithm of the big int with the base `rhs`.
     ///
-    /// Will return a `NonPositiveLogarithm` error if the number is negative, and
-    /// a `LogOfSmallBase` error if the base is less than 2.
+    /// ### Errors:
+    /// * `NonPositiveLogarithm` if the number is less than 1.
+    /// * `LogOfSmallBase` if `rhs` is less than 2.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -1059,7 +1071,8 @@ where
     /// Compute the square root of the big int.
     /// Returns the result as a denormalized number.
     ///
-    /// Will return a `NegativeRoot` error if the number is negative.
+    /// ### Errors:
+    /// * `NegativeRoot` if the number is negative.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -1110,7 +1123,8 @@ where
 
     /// Compute the square root of the big int.
     ///
-    /// Will return a `NegativeRoot` error if the number is negative.
+    /// ### Errors:
+    /// * `NegativeRoot` if the number is negative.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -1124,9 +1138,10 @@ where
 
     /// Compute the nth root of the big int, with root `rhs`.
     /// Returns the result as a denormalized number.
-    ///
-    /// Will return a `NegativeRoot` error if the number is negative, and
-    /// a `SmallRoot` error if the root is less than 2.
+    /// 
+    /// ### Errors:
+    /// * `NegativeRoot` if the number is negative.
+    /// * `SmallRoot` if `rhs` is less than 2.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -1172,8 +1187,9 @@ where
 
     /// Compute the nth root of the big int, with root `rhs`.
     ///
-    /// Will return a `NegativeRoot` error if the number is negative, and
-    /// a `SmallRoot` error if the root is less than 2.
+    /// ### Errors:
+    /// * `NegativeRoot` if the number is negative.
+    /// * `SmallRoot` if `rhs` is less than 2.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -1276,6 +1292,10 @@ where
 
     /// Convert a big int to a printable string using the provided alphabet `alphabet`.
     /// `Display` uses this method with the default alphabet `STANDARD_ALPHABET`.
+    /// 
+    /// ### Errors:
+    /// * `BaseTooHigh` if a digit in the number is too large to be displayed with
+    ///     the chosen character alphabet.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -1305,6 +1325,13 @@ where
     /// Parse a big int from a `value: &str`, referencing the provided `alphabet`
     /// to determine what characters represent which digits. `FromStr` uses this method
     /// with the default alphabet `STANDARD_ALPHABET`.
+    /// 
+    /// ### Errors:
+    /// * `NotEnoughCharacters` if there are no digit characters in the string.
+    /// * `UnrecognizedCharacter` if there is a character present which is neither a `-` sign
+    ///     nor a character present in the passed alphabet.
+    /// * `DigitTooLarge` if a character decodes to a digit value which is larger than the base
+    ///     of the number being parsed can represent.
     ///
     /// ```
     /// use big_int::prelude::*;
@@ -1624,7 +1651,7 @@ trait ToMemo: Iterator + Sized {
 impl<I: Iterator> ToMemo for I {}
 
 /// A builder for a big int. Use this to construct a big int one digit at a time,
-/// then call .build() to finalize the builder.
+/// then call .into() to construct the final int.
 ///
 /// You're most likely better off using one of the `From` implementations
 /// as opposed to directly building your int via a builder.
@@ -1838,7 +1865,7 @@ impl<'a, const BASE: usize, B: BigInt<{ BASE }>> DoubleEndedIterator for BigIntI
 /// assert_eq!(is_power(27, 3), Some(3));
 /// assert_eq!(is_power(256, 2), Some(8));
 /// ```
-pub fn is_power(mut x: usize, y: usize) -> Option<usize> {
+pub(crate) fn is_power(mut x: usize, y: usize) -> Option<usize> {
     if x == 1 {
         Some(0)
     } else {
