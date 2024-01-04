@@ -7,6 +7,7 @@ author = "Maurdekye"
 description = "Simple library for arbitrary-precision, arbitrary-base arithmetic, supporting arbitrarily large integers of any base from 2 to u64::MAX."
 readme = "README.md"
 license = "MIT"
+repository = "https://github.com/Maurdekye/big-int"
 
 [dependencies]
 big-int-proc = { version = "1.4.0", path = "big-int-proc" }
