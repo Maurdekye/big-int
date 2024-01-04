@@ -136,7 +136,7 @@ macro_rules! loose_definition {
                     self.digits[..self.digits.len().checked_sub(amount).unwrap_or_default()].to_vec();
             }
 
-            fn shl_assign_inner(&mut self, amount: usize) {
+            unsafe fn shl_assign_inner(&mut self, amount: usize) {
                 self.digits.extend(vec![0; amount]);
             }
 

@@ -446,10 +446,12 @@ where
                         result.add_assign_inner(addends.get(index).unwrap().clone());
                     }
                 }
-                addends.get_mut(index).unwrap().shl_assign_inner(1);
+                unsafe {
+                    addends.get_mut(index).unwrap().shl_assign_inner(1);
+                }
             }
         }
-        OUT::Denormal::from(result.with_sign(sign)).shl_inner(shift)
+        OUT::from(result.with_sign(sign)).shl_inner(shift)
     }
 
     /// Default implementation of `MulAssign`.
@@ -791,9 +793,11 @@ where
     /// let a: Tight<10> = 3.into();
     /// assert_eq!(a.shl_inner(2), 300.into());
     /// ```
-    fn shl_inner(mut self, amount: usize) -> Self {
-        self.shl_assign_inner(amount);
-        self
+    fn shl_inner(mut self, amount: usize) -> Self::Denormal {
+        unsafe {
+            self.shl_assign_inner(amount);
+        }
+        self.into()
     }
 
     /// Multiply the int by BASE^amount in place.
@@ -813,8 +817,8 @@ where
     /// a.shl_assign_inner(2);
     /// assert_eq!(a, 300.into());
     /// ```
-    fn shl_assign_inner(&mut self, amount: usize) {
-        *self = self.clone().shl_inner(amount);
+    unsafe fn shl_assign_inner(&mut self, amount: usize) {
+        *self = self.clone().shl_inner(amount).unsafe_into();
     }
 
     /// Divide one int by another, returning the quotient & remainder as a pair,
@@ -877,8 +881,11 @@ where
         if !rem.is_zero() {
             rem.set_sign(sign);
         }
+        unsafe {
+            rem.shl_assign_inner(shift);
+        }
 
-        Ok((quot.with_sign(sign).into(), rem.shl_inner(shift)))
+        Ok((quot.with_sign(sign).into(), rem))
     }
 
     /// Divide one int by another, returning the quotient & remainder as a pair,
@@ -900,11 +907,22 @@ where
     }
 
     /// Exponentiate the big int by `rhs`.
+    /// Returns the result as a denormalized number.
+    ///
+    /// Will return a `NegativeExponentiation` error if the exponent is negative.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 10.into();
+    /// let b: Loose<10> = a.exp::<Loose<10>, Loose<10>>(3.into()).unwrap();
+    /// assert_eq!(b, 1000.into());
+    /// ```
     fn exp_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         mut rhs: RHS,
     ) -> Result<OUT::Denormal, BigIntError> {
-        if rhs.sign() == Negative {
+        if rhs < RHS::zero() {
             return Err(BigIntError::NegativeExponentiation);
         }
         let mut mullands = self.mullands().memo();
@@ -937,6 +955,17 @@ where
         Ok(result.into())
     }
 
+    /// Exponentiate the big int by `rhs`.
+    ///
+    /// Will return a `NegativeExponentiation` error if the exponent is negative.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 10.into();
+    /// let b: Loose<10> = a.exp::<Loose<10>, Loose<10>>(3.into()).unwrap();
+    /// assert_eq!(b, 1000.into());
+    /// ```
     fn exp<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         rhs: RHS,
@@ -944,6 +973,19 @@ where
         self.exp_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
     }
 
+    /// Compute the logarithm of the big int with the base `rhs`.
+    /// Returns the result as a denormalized number.
+    ///
+    /// Will return a `NonPositiveLogarithm` error if the number is negative, and
+    /// a `LogOfSmallBase` error if the base is less than 2.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 1000.into();
+    /// let b: Loose<10> = a.log::<Loose<10>, Loose<10>>(10.into()).unwrap();
+    /// assert_eq!(b, 3.into());
+    /// ```
     fn log_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         rhs: RHS,
@@ -1000,6 +1042,18 @@ where
         Ok(result.into())
     }
 
+    /// Compute the logarithm of the big int with the base `rhs`.
+    ///
+    /// Will return a `NonPositiveLogarithm` error if the number is negative, and
+    /// a `LogOfSmallBase` error if the base is less than 2.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 1000.into();
+    /// let b: Loose<10> = a.log::<Loose<10>, Loose<10>>(10.into()).unwrap();
+    /// assert_eq!(b, 3.into());
+    /// ```
     fn log<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         rhs: RHS,
@@ -1007,6 +1061,17 @@ where
         self.log_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
     }
 
+    /// Compute the square root of the big int.
+    /// Returns the result as a denormalized number.
+    ///
+    /// Will return a `NegativeRoot` error if the number is negative.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 100.into();
+    /// assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 10.into());
+    /// ```
     fn sqrt_inner<OUT: BigInt<{ BASE }>>(self) -> Result<OUT::Denormal, BigIntError> {
         if self < Self::zero() {
             return Err(BigIntError::NegativeRoot);
@@ -1048,10 +1113,32 @@ where
         Ok(base.into())
     }
 
+    /// Compute the square root of the big int.
+    ///
+    /// Will return a `NegativeRoot` error if the number is negative.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 100.into();
+    /// assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 10.into());
+    /// ```
     fn sqrt<OUT: BigInt<{ BASE }>>(self) -> Result<OUT, BigIntError> {
         self.sqrt_inner::<OUT>().map(|x| x.unwrap())
     }
 
+    /// Compute the nth root of the big int, with root `rhs`.
+    /// Returns the result as a denormalized number.
+    ///
+    /// Will return a `NegativeRoot` error if the number is negative, and
+    /// a `SmallRoot` error if the root is less than 2.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 27.into();
+    /// assert_eq!(a.root::<Loose<10>, Loose<10>>(3.into()).unwrap(), 3.into());
+    /// ```
     fn root_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         rhs: RHS,
@@ -1088,6 +1175,17 @@ where
         Ok(result.into())
     }
 
+    /// Compute the nth root of the big int, with root `rhs`.
+    ///
+    /// Will return a `NegativeRoot` error if the number is negative, and
+    /// a `SmallRoot` error if the root is less than 2.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 27.into();
+    /// assert_eq!(a.root::<Loose<10>, Loose<10>>(3.into()).unwrap(), 3.into());
+    /// ```
     fn root<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         rhs: RHS,
@@ -1095,6 +1193,19 @@ where
         self.root_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
     }
 
+    /// Check if the number is even.
+    ///
+    /// O(1) for numbers with even bases, and O(log(n)) for numbers
+    /// with odd bases.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let mut n: Tight<10> = 16;
+    /// assert!(n.is_even());
+    /// n += 1.into();
+    /// assert!(!n.is_even());
+    /// ```
     fn is_even(&self) -> bool {
         if BASE % 2 == 0 {
             self.get_digit(self.len() - 1)
@@ -1357,7 +1468,9 @@ struct AddendSet<const BASE: usize, B: BigInt<{ BASE }>> {
     addend: B,
 }
 
+/// Construct an addend set from a big int.
 trait Addends<const BASE: usize, B: BigInt<{ BASE }>> {
+    /// Construct an addend set from a big int.
     fn addends(self) -> AddendSet<BASE, B>;
 }
 
@@ -1386,7 +1499,9 @@ struct MullandSet<const BASE: usize, B: BigInt<{ BASE }>> {
     mulland: B,
 }
 
+/// Construct a mulland set from a big int.
 trait Mullands<const BASE: usize, B: BigInt<{ BASE }>> {
+    /// Construct a mulland set from a big int.
     fn mullands(self) -> MullandSet<BASE, B>;
 }
 
@@ -1416,7 +1531,9 @@ struct NAddendSet<const BASE: usize, B: BigInt<{ BASE }>> {
     factor: B,
 }
 
+/// Construct an n-adddend set from a big int.
 trait NAddends<const BASE: usize, B: BigInt<{ BASE }>> {
+    /// Construct an n-adddend set from a big int.
     fn n_addends(self, factor: B) -> NAddendSet<BASE, B>;
 }
 
@@ -1457,6 +1574,8 @@ impl<I: Iterator> IterMemo<I> {
         self.memo.get(index)
     }
 
+    /// Fetch a mutable reference to a memoized item from the iterator,
+    /// pulling new items from it as needed.
     fn get_mut(&mut self, index: usize) -> Option<&mut I::Item> {
         while self.memo.len() <= index && !self.exhausted {
             self.store_next();
@@ -1464,6 +1583,8 @@ impl<I: Iterator> IterMemo<I> {
         self.memo.get_mut(index)
     }
 
+    /// Store the next element from the iterator in the memo, growing
+    /// it by one.
     fn store_next(&mut self) {
         if let Some(item) = self.iter.next() {
             self.memo.push(item);

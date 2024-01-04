@@ -268,7 +268,7 @@ impl<const BASE: usize> BigInt<{ BASE }> for Tight<BASE> {
         self.normalize();
     }
 
-    fn shl_assign_inner(&mut self, amount: usize) {
+    unsafe fn shl_assign_inner(&mut self, amount: usize) {
         self.end_offset += Self::BITS_PER_DIGIT * amount;
         let new_len = self.end_offset.div_ceil(DATUM_SIZE);
         let cur_len = self.data.len();

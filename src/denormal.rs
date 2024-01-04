@@ -1,18 +1,18 @@
 //! Denormalized numbers.
-//! 
+//!
 //! A denormalized number may not be in a consistent form, and may behave in
-//! unexpected ways while performing mathematical operations. It is typically best 
+//! unexpected ways while performing mathematical operations. It is typically best
 //! practice to normalize a denormalized number before using it in other contexts.
-//! 
-//! Sometimes, however, maintaining a number in a denormalized state is desirable for 
+//!
+//! Sometimes, however, maintaining a number in a denormalized state is desirable for
 //! one reason or another; for example, performing normalization is a nonzero performance
 //! cost; you may save some computation by performing several consecutive operations in a row
 //! on a denormalized number before finally normalizing it at the end. Additionally, trailing
 //! zeros may be desirable to maintain, for data manipulation purposes.
-//! 
+//!
 //! ```
 //! use big_int::prelude::*;
-//! 
+//!
 //! let a: Tight<10> = 194.into();
 //! let a: DenormalTight<10> = a.sub_inner::<Tight<10>, Tight<10>>(100.into());
 //! assert_eq!(format!("{a}"), "094".to_string());
@@ -22,20 +22,20 @@
 use crate::*;
 
 /// Represents a denormalized number.
-/// 
+///
 /// A denormalized number may not be in a consistent form, and may behave in
-/// unexpected ways while performing mathematical operations. It is typically best 
+/// unexpected ways while performing mathematical operations. It is typically best
 /// practice to normalize a denormalized number before using it in other contexts.
-/// 
-/// Sometimes, however, maintaining a number in a denormalized state is desirable for 
+///
+/// Sometimes, however, maintaining a number in a denormalized state is desirable for
 /// one reason or another; for example, performing normalization is a nonzero performance
 /// cost; you may save some computation by performing several consecutive operations in a row
 /// on a denormalized number before finally normalizing it at the end. Additionally, trailing
 /// zeros may be desirable to maintain, for data manipulation purposes.
-/// 
+///
 /// ```
 /// use big_int::prelude::*;
-/// 
+///
 /// let a: Tight<10> = 194.into();
 /// let a: DenormalTight<10> = a.sub_inner::<Tight<10>, Tight<10>>(100.into());
 /// assert_eq!(format!("{a}"), "094".to_string());
@@ -48,6 +48,8 @@ pub struct Denormal<const BASE: usize, B: BigInt<{ BASE }>>(pub(crate) B);
 impl<const BASE: usize, B: BigInt<{ BASE }>> BigInt<BASE> for Denormal<BASE, B> {
     type Builder = DenormalBuilder<BASE, B::Builder>;
     type Denormal = Self;
+
+    // required methods
 
     fn len(&self) -> usize {
         self.0.len()
@@ -93,98 +95,8 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> BigInt<BASE> for Denormal<BASE, B> 
         self.0.pop_front()
     }
 
-    fn neg_inner(self) -> Self::Denormal {
-        unsafe { self.0.neg_inner().unsafe_into() }.into()
-    }
-
-    fn add_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
-        unsafe { self.0.add_inner::<_, OUT>(rhs).unsafe_into() }.into()
-    }
-
-    unsafe fn add_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
-        self.0.add_assign_inner(rhs)
-    }
-
-    fn sub_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
-        self,
-        rhs: RHS,
-    ) -> OUT::Denormal {
-        unsafe { self.0.sub_inner::<_, OUT>(rhs).unsafe_into() }.into()
-    }
-
-    unsafe fn sub_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
-        self.0.sub_assign_inner(rhs)
-    }
-
-    fn mul_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
-        self,
-        rhs: RHS,
-    ) -> OUT::Denormal {
-        unsafe { self.0.mul_inner::<_, OUT>(rhs).unsafe_into() }.into()
-    }
-
-    unsafe fn mul_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
-        self.0.mul_assign_inner(rhs)
-    }
-
-    fn div_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
-        unsafe { self.0.div_inner::<_, OUT>(rhs).unsafe_into() }.into()
-    }
-
-    unsafe fn div_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
-        self.0.div_assign_inner(rhs)
-    }
-
-    fn from_str_inner(s: &str) -> Result<Self::Denormal, BigIntError> {
-        B::from_str_inner(s).map(|x| unsafe { x.unsafe_into() }.into())
-    }
-
-    fn from_iter_inner<T: IntoIterator<Item = Digit>>(iter: T) -> Self::Denormal {
-        unsafe { B::from_iter_inner(iter).unsafe_into() }.into()
-    }
-
-    unsafe fn next_inner(&mut self) -> Option<Digit> {
-        self.0.next_inner()
-    }
-
-    unsafe fn next_back_inner(&mut self) -> Option<Digit> {
-        self.0.pop_back()
-    }
-
-    fn from_u128_inner(value: u128) -> Self {
-        unsafe { B::from_u128_inner(value).unsafe_into() }.into()
-    }
-
-    fn from_i128_inner(value: i128) -> Self {
-        unsafe { B::from_i128_inner(value).unsafe_into() }.into()
-    }
-
-    fn into_u128_inner(self) -> u128 {
-        self.0.into_u128_inner()
-    }
-
-    fn into_i128_inner(self) -> i128 {
-        self.0.into_i128_inner()
-    }
-
     fn is_zero(&self) -> bool {
         self.0.is_zero()
-    }
-
-    fn shr_inner(self, amount: usize) -> Self::Denormal {
-        unsafe { self.0.shr_inner(amount).unsafe_into() }.into()
-    }
-
-    unsafe fn shr_assign_inner(&mut self, amount: usize) {
-        self.0.shr_assign_inner(amount);
-    }
-
-    fn shl_inner(self, amount: usize) -> Self {
-        self.0.shl_inner(amount).into()
-    }
-
-    fn shl_assign_inner(&mut self, amount: usize) {
-        self.0.shl_assign_inner(amount);
     }
 
     fn normalized(self) -> Self {
@@ -195,31 +107,44 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> BigInt<BASE> for Denormal<BASE, B> 
         self.0.normalize();
     }
 
-    fn display(&self, alphabet: &str) -> Result<String, BigIntError> {
-        self.0.display(alphabet)
-    }
-
-    fn parse(value: &str, alphabet: &str) -> Result<Self::Denormal, ParseError> {
-        B::parse(value, alphabet).map(|x| unsafe { x.unsafe_into() }.into())
-    }
-
-    fn div_rem_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+    fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         rhs: RHS,
-    ) -> Result<(OUT::Denormal, OUT::Denormal), BigIntError> {
-        self.0
-            .div_rem_inner::<_, OUT>(rhs)
-            .map(|(q, r): (OUT::Denormal, OUT::Denormal)| unsafe {
-                (q.unsafe_into().into(), r.unsafe_into().into())
-            })
+    ) -> Result<(OUT, OUT), BigIntError> {
+        self.div_rem_inner::<RHS, OUT>(rhs)
+            .map(|(q, r)| unsafe { (q.unsafe_into(), r.unsafe_into()) })
     }
 
-    fn convert_inner<const TO: usize, OUT: BigInt<{ TO }>>(self) -> OUT::Denormal {
-        unsafe { self.0.convert::<TO, OUT>().unsafe_into() }.into()
+    fn exp<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT, BigIntError> {
+        self.exp_inner::<RHS, OUT>(rhs)
+            .map(|x| unsafe { x.unsafe_into() })
     }
 
-    fn cmp_magnitude<RHS: BigInt<{ BASE }>>(&self, rhs: &RHS) -> Ordering {
-        self.0.cmp_magnitude(rhs)
+    fn log<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT, BigIntError> {
+        self.log_inner::<RHS, OUT>(rhs)
+            .map(|x| unsafe { x.unsafe_into() })
+    }
+
+    fn root<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT, BigIntError> {
+        self.root_inner::<RHS, OUT>(rhs)
+            .map(|x| unsafe { x.unsafe_into() })
+    }
+
+    fn sqrt<OUT: BigInt<{ BASE }>>(self) -> Result<OUT, BigIntError> {
+        self.sqrt_inner::<OUT>().map(|x| unsafe { x.unsafe_into() })
+    }
+
+    fn convert<const TO: usize, OUT: BigInt<{ TO }>>(self) -> OUT {
+        unsafe { self.convert_inner::<TO, OUT>().unsafe_into() }
     }
 }
 
@@ -356,7 +281,9 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> ::std::ops::Shl for Denormal<BASE, 
 
 impl<const BASE: usize, B: BigInt<{ BASE }>> ::std::ops::ShlAssign for Denormal<BASE, B> {
     fn shl_assign(&mut self, rhs: Self) {
-        <Denormal<BASE, B> as ::big_int::BigInt<BASE>>::shl_assign_inner(self, rhs.into())
+        unsafe {
+            <Denormal<BASE, B> as ::big_int::BigInt<BASE>>::shl_assign_inner(self, rhs.into())
+        }
     }
 }
 
@@ -453,7 +380,7 @@ int_conversions!(
 );
 
 /// A builder for a denormal int.
-/// 
+///
 /// Exists purely clerically as a consequence of the abstractions present. Unlikely
 /// to be used directly.
 #[derive(Debug, Clone)]

@@ -179,13 +179,18 @@ pub fn auto_big_int_derive(input: TokenStream) -> TokenStream {
             type Output = Self;
 
             fn shl(self, rhs: Self) -> Self::Output {
-                <#name #ty_generics as ::big_int::BigInt<BASE>>::shl_inner(self, rhs.into())
+                <<#name #ty_generics as ::big_int::BigInt<BASE>>::Denormal as ::big_int::Unwrap<#name #ty_generics>>::unwrap(
+                    <#name #ty_generics as ::big_int::BigInt<BASE>>::shl_inner(self, rhs.into())
+                )
             }
         }
 
         impl #impl_generics ::std::ops::ShlAssign for #name #ty_generics #where_clause {
             fn shl_assign(&mut self, rhs: Self) {
-                <#name #ty_generics as ::big_int::BigInt<BASE>>::shl_assign_inner(self, rhs.into())
+                unsafe {
+                    <#name #ty_generics as ::big_int::BigInt<BASE>>::shl_assign_inner(self, rhs.into())
+                }
+                <#name #ty_generics as ::big_int::BigInt<BASE>>::normalize(self);
             }
         }
 
