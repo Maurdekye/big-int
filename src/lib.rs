@@ -928,24 +928,20 @@ where
             return Err(BigIntError::NegativeExponentiation);
         }
         let mut mullands = self.mullands().memo();
-        let mut max_mulland = 0;
-        let mut max_mulland_tetrand: RHS = 1.into();
-        let mut mulland_tetrands: Vec<RHS> = vec![];
+        let mut addends = RHS::from(1).addends().memo();
+        let mut power = 0;
         let mut result: OUT = 1.into();
-        while rhs >= max_mulland_tetrand {
-            rhs -= max_mulland_tetrand.clone();
+        while rhs.cmp_inner(addends.get(power).unwrap()).is_ge() {
+            rhs -= addends.get(power).unwrap().clone();
             unsafe {
-                result.mul_assign_inner(mullands.get(max_mulland).unwrap().clone());
+                result.mul_assign_inner(mullands.get(power).unwrap().clone());
             }
-            max_mulland += 1;
-            mulland_tetrands.push(max_mulland_tetrand.clone());
-            max_mulland_tetrand += max_mulland_tetrand.clone();
+            power += 1;
         }
-        mulland_tetrands.push(max_mulland_tetrand);
-        for (mulland_index, mulland_tetrand) in mulland_tetrands.into_iter().enumerate().rev() {
-            let comparison = rhs.cmp_inner(&mulland_tetrand);
+        for mulland_index in (0..power).rev() {
+            let comparison = rhs.cmp_inner(addends.get(mulland_index).unwrap());
             if comparison.is_ge() {
-                rhs -= mulland_tetrand;
+                rhs -= addends.get(mulland_index).unwrap().clone();
                 unsafe {
                     result.mul_assign_inner(mullands.get(mulland_index).unwrap().clone());
                 }
@@ -999,32 +995,28 @@ where
             return Err(BigIntError::LogOfSmallBase);
         }
         let mut mullands = rhs.mullands().memo();
-        let mut max_mulland = 0;
-        let mut max_mulland_tetrand: OUT = 1.into();
-        let mut mulland_tetrands: Vec<OUT> = vec![];
+        let mut addends = OUT::from(1).addends().memo();
+        let mut power = 0;
         let mut base: Self = 1.into();
         let mut exp = OUT::zero();
         let result = 'outer: {
             loop {
                 let next_base: Self = unsafe {
                     base.clone()
-                        .mul_inner::<RHS, Self>(mullands.get(max_mulland).unwrap().clone())
+                        .mul_inner::<RHS, Self>(mullands.get(power).unwrap().clone())
                         .unsafe_into()
                 };
                 let comparison = next_base.cmp_inner(&self);
                 if comparison.is_le() {
-                    exp += max_mulland_tetrand.clone();
+                    exp += addends.get(power).unwrap().clone();
                     base = next_base;
-                    max_mulland += 1;
-                    mulland_tetrands.push(max_mulland_tetrand.clone());
-                    max_mulland_tetrand += max_mulland_tetrand.clone();
+                    power += 1;
                 }
                 if comparison.is_ge() {
                     break;
                 }
             }
-            mulland_tetrands.push(max_mulland_tetrand);
-            for (mulland_index, mulland_tetrand) in mulland_tetrands.into_iter().enumerate().rev() {
+            for mulland_index in (0..power).rev() {
                 let next_base: Self = unsafe {
                     base.clone()
                         .mul_inner::<RHS, Self>(mullands.get(mulland_index).unwrap().clone())
@@ -1032,7 +1024,7 @@ where
                 };
                 let comparison = next_base.cmp_inner(&self);
                 if comparison.is_le() {
-                    exp += mulland_tetrand.clone();
+                    exp += addends.get(mulland_index).unwrap().clone();
                     if comparison.is_eq() {
                         break 'outer exp;
                     }
