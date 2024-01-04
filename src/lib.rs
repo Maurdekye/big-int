@@ -1463,40 +1463,6 @@ where
     fn abs(self) -> Self {
         self.with_sign(Positive)
     }
-
-    /// Return the lesser of two ints.
-    /// 
-    /// ```
-    /// use big_int::prelude::*;
-    /// 
-    /// let a: Loose<10> = 5.into();
-    /// let b = 10.into();
-    /// assert_eq!(a.min(b), 5.into());
-    /// ```
-    fn min(self, rhs: Self) -> Self {
-        if self > rhs {
-            self
-        } else {
-            rhs
-        }
-    }
-
-    /// Return the greater of two ints.
-    /// 
-    /// ```
-    /// use big_int::prelude::*;
-    /// 
-    /// let a: Loose<10> = 5.into();
-    /// let b = 10.into();
-    /// assert_eq!(a.max(b), 10.into());
-    /// ```
-    fn max(self, rhs: Self) -> Self {
-        if self > rhs {
-            rhs
-        } else {
-            self
-        }
-    }
 }
 
 /// Prepare a set of addends.
