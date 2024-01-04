@@ -262,7 +262,15 @@ fn division_2() {
 fn division_3() {
     let a: Loose<10> = (-27792).into();
     let b: Loose<10> = 6.into();
-    assert_eq!(a.div_rem_inner::<_, Loose<10>>(b), Ok(((-4632).into(), 0.into())));
+    let q: DenormalLoose<10> = (-4632).into();
+    let rhs = Ok((q, 0.into()));
+    assert_eq!(a.div_rem_inner::<_, Loose<10>>(b), rhs);
+}
+
+#[test]
+fn incomprehensible_denormal_conversion_bug() {
+    let n: DenormalLoose<10> = (-1).into();
+    println!("{n}");
 }
 
 #[test]

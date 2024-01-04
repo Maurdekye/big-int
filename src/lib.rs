@@ -540,7 +540,7 @@ where
     /// Trait implementation may be provided automatically by `big_int_proc::BigIntTraits`.
     fn from_i128_inner(value: i128) -> Self::Denormal {
         if value < 0 {
-            Self::from_u128_inner((-value) as u128).with_sign(Negative)
+            -Self::from_u128_inner((-value) as u128)
         } else {
             Self::from_u128_inner(value as u128)
         }
