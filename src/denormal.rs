@@ -107,6 +107,22 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> BigInt<BASE> for Denormal<BASE, B> 
         self.0.normalize();
     }
 
+    unsafe fn shl_assign_inner(&mut self, amount: usize) {
+        self.0.shl_assign_inner(amount);
+    }
+
+    fn shl_inner(self, amount: usize) -> Self::Denormal {
+        unsafe { self.0.shl_inner(amount).unsafe_into() }.into()
+    }
+
+    unsafe fn shr_assign_inner(&mut self, amount: usize) {
+        self.0.shr_assign_inner(amount)
+    }
+
+    fn shr_inner(self, amount: usize) -> Self::Denormal {
+        unsafe { self.0.shr_inner(amount).unsafe_into() }.into()
+    }
+
     fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
         rhs: RHS,
