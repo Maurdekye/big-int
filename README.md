@@ -1,6 +1,6 @@
 # Big Int
 
-Simple library for arbitrary-precision, arbitrary-base arithmetic, supporting arbitrarily large integers of any base from 2 to `usize::MAX`.
+Simple library for arbitrary-precision, arbitrary-base arithmetic, supporting arbitrarily large integers of any base from 2 to `u64::MAX`.
 
 ```rs
 use big_int::prelude::*;

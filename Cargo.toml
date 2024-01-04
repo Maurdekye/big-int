@@ -1,7 +1,7 @@
 workspace = { members = ["big-int-proc"] }
 [package]
 name = "big-int"
-version = "6.0.1"
+version = "6.0.2"
 edition = "2021"
 author = "Maurdekye"
 description = "Simple library for arbitrary-precision, arbitrary-base arithmetic, supporting arbitrarily large integers of any base from 2 to u64::MAX."
