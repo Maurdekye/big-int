@@ -42,5 +42,4 @@ This crate contains five primary big int implementations:
     2-2^64. However, the additional indirection adds some performance overhead.
 
 Ints support most basic arithmetic operations, including addition, subtraction, multiplication,
-division, and left/right shifting. Notably, shifting acts on the `BASE` of the associated number, increasing
-or decreasing the magnitude by powers of `BASE` as opposed to powers of 2.
+division, exponentiation, logarithm, nth root, and left/right shifting. Notably, shifting acts on the `BASE` of the associated number, increasing or decreasing the magnitude by powers of `BASE` as opposed to powers of 2.
