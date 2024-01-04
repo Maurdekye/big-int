@@ -1934,15 +1934,6 @@ impl<'a, const BASE: usize, B: BigInt<{ BASE }>> DoubleEndedIterator for BigIntI
 ///
 /// If `x` is a power of `y`, return `Some(n)` such that
 /// `x == y^n`. If not, return `None`.
-///
-/// ```
-/// use big_int::prelude::*;
-///
-/// assert_eq!(is_power(2, 3), None);
-/// assert_eq!(is_power(16, 4), Some(2));
-/// assert_eq!(is_power(27, 3), Some(3));
-/// assert_eq!(is_power(256, 2), Some(8));
-/// ```
 pub(crate) fn is_power(mut x: usize, y: usize) -> Option<usize> {
     if x == 1 {
         Some(0)

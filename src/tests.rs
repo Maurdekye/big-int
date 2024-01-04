@@ -216,10 +216,10 @@ fn fuzzy_log() {
 
 #[test]
 fn fuzzy_sqrt_2() {
-    for (i, n) in test_values!([u8; 500], [u128; 1000]).enumerate() {
-        if i % 50 == 0 {
-            println!("{i}");
-        }
+    for (_i, n) in test_values!([u8; 500], [u128; 1000]).enumerate() {
+        // if _i % 50 == 0 {
+        //     println!("{i}");
+        // }
         let n: Loose<10> = n.max(1).into();
         let squared: Loose<10> = n.clone().exp(Loose::<10>::from(2)).unwrap();
         assert_eq!(squared.clone().root::<Loose<10>, Loose<10>>(2.into()).unwrap(), n, "sqrt({squared}) = {n}");
@@ -240,10 +240,10 @@ fn fuzzy_sqrt_2() {
 
 #[test]
 fn fuzzy_cbrt_2() {
-    for (i, n) in test_values!([u8; 500], [u128; 1000]).enumerate() {
-        if i % 50 == 0 {
-            println!("{i}");
-        }
+    for (_i, n) in test_values!([u8; 500], [u128; 1000]).enumerate() {
+        // if _i % 50 == 0 {
+        //     println!("{i}");
+        // }
         let n: Loose<10> = n.max(1).into();
         let cubed: Loose<10> = n.clone().exp(Loose::<10>::from(3)).unwrap();
         assert_eq!(cubed.clone().root::<Loose<10>, Loose<10>>(3.into()).unwrap(), n, "cbrt({cubed}) = {n}");
