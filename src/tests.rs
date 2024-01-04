@@ -176,15 +176,11 @@ fn log_4() {
 
 #[test]
 fn fuzzy_log() {
-    for (a, b) in test_pairs!([u8; 100], [u16; 1000]) {
-        let b = (b.max(0) % 16).max(2);
-        let base = a.abs().max(1);
-        let mut result: LooseBytes<10> = 1.into();
-        for _ in 0..base {
-            result *= b.into();
-        }
-        // sdbg!((&result, &b, &base));
-        assert_eq!(result.clone().log::<LooseBytes<10>, LooseBytes<10>>(b.into()).unwrap(), base.into(), "log({result})_{b} = {base}");
+    for (base, exp) in test_pairs!([u8; 100], [u16; 1000]) {
+        let base: LooseBytes<10> = base.max(2).into();
+        let exp: LooseBytes<10> = (exp % 32).max(0).into();
+        let expd: LooseBytes<10> = base.clone().exp(exp.clone()).unwrap();
+        assert_eq!(expd.clone().log::<LooseBytes<10>, LooseBytes<10>>(base.clone()).unwrap(), exp, "log({expd})_{base} = {exp}");
     }
 }
 

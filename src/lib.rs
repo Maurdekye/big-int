@@ -420,6 +420,23 @@ where
         let sign = self.sign() * rhs.sign();
         self.set_sign(Positive);
         rhs.set_sign(Positive);
+        let mut shift = 0;
+        if !self.is_zero() {
+            while let Some(0) = self.get_back(1) {
+                unsafe {
+                    self.shr_assign_inner(1);
+                }
+                shift += 1;
+            }
+        }
+        if !rhs.is_zero() {
+            while let Some(0) = rhs.get_back(1) {
+                unsafe {
+                    rhs.shr_assign_inner(1);
+                }
+                shift += 1;
+            }
+        }
         let mut result = OUT::zero();
         let mut addends = rhs.clone().addends().memo();
         for digit in self.rev() {
@@ -432,7 +449,7 @@ where
                 addends.get_mut(index).unwrap().shl_assign_inner(1);
             }
         }
-        result.with_sign(sign).into()
+        OUT::Denormal::from(result.with_sign(sign)).shl_inner(shift)
     }
 
     /// Default implementation of `MulAssign`.
@@ -820,6 +837,14 @@ where
         if rhs.len() > self.len() {
             return Ok((OUT::Denormal::zero(), self.convert_inner::<BASE, OUT>()));
         }
+        let mut shift = 0;
+        while let (Some(0), Some(0)) = (self.get_back(1), rhs.get_back(1)) {
+            unsafe {
+                self.shr_assign_inner(1);
+                rhs.shr_assign_inner(1);
+            }
+            shift += 1;
+        }
         let sign = self.sign() * rhs.sign();
         self.set_sign(Positive);
         rhs.set_sign(Positive);
@@ -853,7 +878,7 @@ where
             rem.set_sign(sign);
         }
 
-        Ok((quot.with_sign(sign).into(), rem))
+        Ok((quot.with_sign(sign).into(), rem.shl_inner(shift)))
     }
 
     /// Divide one int by another, returning the quotient & remainder as a pair,
@@ -987,7 +1012,7 @@ where
             return Err(BigIntError::NegativeRoot);
         }
         if self.is_zero() {
-            return Ok(OUT::Denormal::zero())
+            return Ok(OUT::Denormal::zero());
         }
         let mut sq_addends = OUT::from(1).n_addends(4.into()).memo();
         let mut base_addends = OUT::from(1).addends().memo();
@@ -1005,30 +1030,19 @@ where
         }
         let mut square = sq_addends.get(index).unwrap().clone();
         let mut base = base_addends.get(index).unwrap().clone();
-        // sdbg!(index);
-        // sdbg!(&square);
-        // sdbg!(&base);
         for i in (0..index).rev() {
-            // sdbg!(i);
             let base_addition = base_addends.get(i).unwrap().clone();
             let sq_addition = sq_addends.get(i).unwrap().clone();
-            // sdbg!(&base_addition);
-            // sdbg!(&sq_addition);
             let mut middle_part = base.clone() * base_addition.clone();
             middle_part += middle_part.clone();
-            // sdbg!(&middle_part);
             let new_square = square.clone() + middle_part + sq_addition;
             let comparison = new_square.cmp_inner(&self);
-            // sdbg!(&new_square);
-            // sdbg!(&comparison);
             if comparison.is_le() {
                 base += base_addition;
-                // sdbg!(&base);
                 if comparison.is_eq() {
                     break;
                 }
                 square = new_square;
-                // sdbg!(&square);
             }
         }
         Ok(base.into())
@@ -1046,41 +1060,30 @@ where
             return Err(BigIntError::NegativeRoot);
         }
         if self.is_zero() {
-            return Ok(OUT::Denormal::zero())
+            return Ok(OUT::Denormal::zero());
         }
         if rhs <= 1.into() {
             return Err(BigIntError::SmallRoot);
         }
-        // sdbg!(&self);
-        // sdbg!(&rhs);
         let result_digits = (self.len() / Into::<usize>::into(rhs.clone())).max(1);
         let mut result = OUT::from(1).shl_inner(result_digits);
         result.set_digit(0, 0);
-        // sdbg!(&result);
 
         'outer: for i in 0..result.len() {
-            // sdbg!(i);
             let mut digit_value = 0;
             for index in (0..Self::BITS_PER_DIGIT).rev() {
                 let power = 1 << index;
-                // sdbg!(index);
-                // sdbg!(power);
                 result.set_digit(i, digit_value + power);
-                // sdbg!(&result);
                 let new_exp: Self = result.clone().exp(rhs.clone()).unwrap();
-                // sdbg!(&new_exp);
                 let comparison = new_exp.cmp_inner(&self);
-                // sdbg!(&comparison);
                 if comparison.is_le() {
                     digit_value += power;
-                    // sdbg!(&digit_value);
                     if comparison.is_eq() {
                         break 'outer;
                     }
                 }
             }
             result.set_digit(i, digit_value);
-            // sdbg!(&result);
         }
         Ok(result.into())
     }
@@ -1419,7 +1422,10 @@ trait NAddends<const BASE: usize, B: BigInt<{ BASE }>> {
 
 impl<const BASE: usize, B: BigInt<{ BASE }>> NAddends<BASE, B> for B {
     fn n_addends(self, factor: B) -> NAddendSet<BASE, B> {
-        NAddendSet { addend: self, factor }
+        NAddendSet {
+            addend: self,
+            factor,
+        }
     }
 }
 
@@ -1432,7 +1438,6 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for NAddendSet<BASE, B> {
         Some(next_mulland)
     }
 }
-
 
 /// A memoized iterator. Remembers elements that were yielded by the
 /// underlying iterator, and allows fetching of them after the fact.
