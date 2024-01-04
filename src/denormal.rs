@@ -162,6 +162,177 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> BigInt<BASE> for Denormal<BASE, B> 
     fn convert<const TO: usize, OUT: BigInt<{ TO }>>(self) -> OUT {
         unsafe { self.convert_inner::<TO, OUT>().unsafe_into() }
     }
+
+    fn get_back_inner(&self, index: usize) -> Option<Digit> {
+        self.0.get_back_inner(index)
+    }
+
+    fn default_inner() -> Self {
+        Self(B::default_inner())
+    }
+
+    fn fmt_inner(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt_inner(f)
+    }
+
+    fn partial_cmp_inner<RHS: BigInt<{ BASE }>>(&self, other: &RHS) -> Option<Ordering> {
+        self.0.partial_cmp_inner(other)
+    }
+
+    fn cmp_inner<RHS: BigInt<{ BASE }>>(&self, other: &RHS) -> Ordering {
+        self.0.cmp_inner(other)
+    }
+
+    fn eq_inner<RHS: BigInt<{ BASE }>>(&self, other: &RHS) -> bool {
+        self.0.eq_inner(other)
+    }
+
+    fn neg_inner(self) -> Self::Denormal {
+        unsafe { self.0.neg_inner().unsafe_into() }.into()
+    }
+
+    fn add_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
+        unsafe { self.0.add_inner::<RHS, OUT>(rhs).unsafe_into() }.into()
+    }
+
+    unsafe fn add_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+        self.0.add_assign_inner(rhs)
+    }
+
+    fn sub_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> OUT::Denormal {
+        unsafe { self.0.sub_inner::<RHS, OUT>(rhs).unsafe_into() }.into()
+    }
+
+    unsafe fn sub_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+        self.0.sub_assign_inner(rhs)
+    }
+
+    fn mul_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> OUT::Denormal {
+        unsafe { self.0.mul_inner::<RHS, OUT>(rhs).unsafe_into() }.into()
+    }
+
+    unsafe fn mul_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+        self.0.mul_assign_inner(rhs)
+    }
+
+    fn div_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
+        unsafe { self.0.div_inner::<RHS, OUT>(rhs).unsafe_into() }.into()
+    }
+
+    unsafe fn div_assign_inner<RHS: BigInt<{ BASE }>>(&mut self, rhs: RHS) {
+        self.0.div_assign_inner(rhs)
+    }
+
+    fn from_str_inner(s: &str) -> Result<Self::Denormal, BigIntError> {
+        B::from_str_inner(s).map(|x| unsafe { x.unsafe_into() }.into())
+    }
+
+    fn from_iter_inner<T: IntoIterator<Item = Digit>>(iter: T) -> Self::Denormal {
+        unsafe { B::from_iter_inner(iter).unsafe_into() }.into()
+    }
+
+    unsafe fn next_inner(&mut self) -> Option<Digit> {
+        self.0.next_inner()
+    }
+
+    unsafe fn next_back_inner(&mut self) -> Option<Digit> {
+        self.0.next_back_inner()
+    }
+
+    fn from_u128_inner(value: u128) -> Self::Denormal {
+        unsafe { B::from_u128_inner(value).unsafe_into() }.into()
+    }
+
+    fn from_i128_inner(value: i128) -> Self::Denormal {
+        unsafe { B::from_i128_inner(value).unsafe_into() }.into()
+    }
+
+    fn into_u128_inner(self) -> u128 {
+        self.0.into_u128_inner()
+    }
+
+    fn into_i128_inner(self) -> i128 {
+        self.0.into_i128_inner()
+    }
+
+    fn div_rem_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<(OUT::Denormal, OUT::Denormal), BigIntError> {
+        self.0.div_rem_inner::<RHS, OUT>(rhs).map(|(q, r)| {
+            (
+                unsafe { q.unsafe_into() }.into(),
+                unsafe { r.unsafe_into() }.into(),
+            )
+        })
+    }
+
+    fn exp_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT::Denormal, BigIntError> {
+        self.0
+            .exp_inner::<RHS, OUT>(rhs)
+            .map(|x| unsafe { x.unsafe_into() }.into())
+    }
+
+    fn log_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT::Denormal, BigIntError> {
+        self.0
+            .log_inner::<RHS, OUT>(rhs)
+            .map(|x| unsafe { x.unsafe_into() }.into())
+    }
+
+    fn sqrt_inner<OUT: BigInt<{ BASE }>>(self) -> Result<OUT::Denormal, BigIntError> {
+        self.0
+            .sqrt_inner::<OUT>()
+            .map(|x| unsafe { x.unsafe_into() }.into())
+    }
+
+    fn root_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT::Denormal, BigIntError> {
+        self.0
+            .root_inner::<RHS, OUT>(rhs)
+            .map(|x| unsafe { x.unsafe_into() }.into())
+    }
+
+    fn is_even(&self) -> bool {
+        self.0.is_even()
+    }
+
+    fn iter<'a>(&'a self) -> BigIntIter<'a, BASE, Self> {
+        BigIntIter {
+            index: 0,
+            back_index: self.len(),
+            int: self,
+        }
+    }
+
+    fn display(&self, alphabet: &str) -> Result<String, BigIntError> {
+        self.0.display(alphabet)
+    }
+
+    fn parse(value: &str, alphabet: &str) -> Result<Self::Denormal, ParseError> {
+        B::parse(value, alphabet).map(|x| unsafe { x.unsafe_into() }.into())
+    }
+
+    fn convert_inner<const TO: usize, OUT: BigInt<{ TO }>>(self) -> OUT::Denormal {
+        unsafe { self.0.convert_inner::<TO, OUT>().unsafe_into() }.into()
+    }
+
+    fn cmp_magnitude<RHS: BigInt<{ BASE }>>(&self, rhs: &RHS) -> Ordering {
+        self.0.cmp_magnitude(rhs)
+    }
 }
 
 impl<const BASE: usize, B: BigInt<{ BASE }>> ::big_int::get_back::GetBack for Denormal<BASE, B> {

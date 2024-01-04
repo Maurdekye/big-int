@@ -814,7 +814,9 @@ where
     /// use big_int::prelude::*;
     ///
     /// let mut a: Tight<10> = 3.into();
-    /// a.shl_assign_inner(2);
+    /// unsafe {
+    ///     a.shl_assign_inner(2);
+    /// }
     /// assert_eq!(a, 300.into());
     /// ```
     unsafe fn shl_assign_inner(&mut self, amount: usize) {
@@ -1201,7 +1203,7 @@ where
     /// ```
     /// use big_int::prelude::*;
     ///
-    /// let mut n: Tight<10> = 16;
+    /// let mut n: Tight<10> = 16.into();
     /// assert!(n.is_even());
     /// n += 1.into();
     /// assert!(!n.is_even());
