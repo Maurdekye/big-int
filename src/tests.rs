@@ -135,7 +135,7 @@ fn exp_5() {
 
 #[test]
 fn fuzzy_exp() {
-    for (a, b) in test_pairs!([u8; 100], [u16; 1000]) {
+    for (a, b) in test_pairs!([i8; 100], [i16; 1000]) {
         let b = b.max(0) % 32;
         let base: Tight<10> = a.into();
         let mut result: Tight<10> = 1.into();
@@ -185,5 +185,53 @@ fn fuzzy_log() {
         }
         // sdbg!((&result, &b, &base));
         assert_eq!(result.clone().log::<LooseBytes<10>, LooseBytes<10>>(b.into()).unwrap(), base.into(), "log({result})_{b} = {base}");
+    }
+}
+
+#[test]
+fn sqrt_1() {
+    let a: Loose<10> = 100.into();
+    assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 10.into());
+}
+
+#[test]
+fn sqrt_2() {
+    let a: Loose<10> = 75069002792169_u128.into();
+    assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 8664237.into());
+}
+
+#[test]
+fn sqrt_3() {
+    let a: Loose<10> = 16.into();
+    assert_eq!(a.sqrt::<Loose<10>>().unwrap(), 4.into());
+}
+
+#[test]
+fn fuzzy_sqrt() {
+    for n in test_values!([u8; 500], [u32; 4000]) {
+        let squared: Loose<10> = (n * n).into();
+        assert_eq!(squared.clone().sqrt::<Loose<10>>().unwrap(), n.into(), "sqrt({squared}) = {n}");
+    }
+}
+
+#[test]
+fn root_1() {
+    let a: Loose<10> = 27.into();
+    assert_eq!(a.root::<Loose<10>, Loose<10>>(3.into()).unwrap(), 3.into());
+}
+
+#[test]
+fn root_2() {
+    let a: Loose<10> = 56311189175114996967_u128.into();
+    assert_eq!(a.root::<Loose<10>, Loose<10>>(7.into()).unwrap(), 663.into());
+}
+
+#[test]
+fn fuzzy_root() {
+    for (base, exp) in test_pairs!([u8; 500], [u16; 2000]) {
+        let base: Loose<10> = base.into();
+        let exp: Loose<10> = (exp % 32).max(2).into();
+        let expd: Loose<10> = base.clone().exp(exp.clone()).unwrap();
+        assert_eq!(expd.clone().root::<_, Loose<10>>(exp.clone()).unwrap(), base, "root({expd})_{exp} = {base}");
     }
 }

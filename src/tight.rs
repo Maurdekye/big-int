@@ -57,8 +57,6 @@ pub struct Tight<const BASE: usize> {
 }
 
 impl<const BASE: usize> Tight<BASE> {
-    /// Number of bits required to store a single digit in the chosen `BASE`.
-    const BITS_PER_DIGIT: usize = bits_per_digit(BASE);
 
     /// Construct a `Tight` int directly from raw parts.
     ///
@@ -390,15 +388,4 @@ impl<const BASE: usize> From<TightBuilder<BASE>> for Tight<BASE> {
         let denormal: <Self as BigInt<BASE>>::Denormal = value.into();
         denormal.unwrap()
     }
-}
-
-/// Calculate the minimum number of bits required to store a digit in a given base.
-const fn bits_per_digit(base: usize) -> usize {
-    let mut bits = 1;
-    let mut max_base_of_bits = 2;
-    while max_base_of_bits < base {
-        bits += 1;
-        max_base_of_bits <<= 1;
-    }
-    bits
 }

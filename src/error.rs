@@ -17,6 +17,10 @@ pub enum BigIntError {
     NonPositiveLogarithm,
     #[error("logarithm with base < 2")]
     LogOfSmallBase,
+    #[error("nth root of negative number")]
+    NegativeRoot,
+    #[error("nth root with root < 2")]
+    SmallRoot,
 }
 
 /// Represents an error with regards to a big int parsing operation.

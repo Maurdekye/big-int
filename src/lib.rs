@@ -49,8 +49,8 @@ use std::{
     cmp::Ordering,
     fmt::Display,
     ops::{
-        Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr,
-        ShrAssign, Sub, SubAssign,
+        Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Shl, ShlAssign, Shr, ShrAssign, Sub,
+        SubAssign,
     },
     str::FromStr,
 };
@@ -182,6 +182,8 @@ where
 {
     type Builder: BigIntBuilder<{ BASE }> + Into<Self::Denormal> + Into<Self>;
     type Denormal: BigInt<BASE> + From<Self> + UnsafeInto<Self> + Unwrap<Self>;
+
+    const BITS_PER_DIGIT: usize = bits_per_digit(BASE);
 
     /// Default implementation of `big_int::GetBack`.
     ///
@@ -419,19 +421,15 @@ where
         self.set_sign(Positive);
         rhs.set_sign(Positive);
         let mut result = OUT::zero();
-        let mut addends = AddendSet::from(rhs.clone()).memo();
+        let mut addends = rhs.clone().addends().memo();
         for digit in self.rev() {
-            let mut power = 1;
-            let mut index = 0;
-            while power < BASE as u64 {
-                if digit & power != 0 {
+            for index in 0..Self::BITS_PER_DIGIT {
+                if digit & (1 << index) != 0 {
                     unsafe {
                         result.add_assign_inner(addends.get(index).unwrap().clone());
                     }
                 }
                 addends.get_mut(index).unwrap().shl_assign_inner(1);
-                power <<= 1;
-                index += 1;
             }
         }
         result.with_sign(sign).into()
@@ -802,6 +800,80 @@ where
         *self = self.clone().shl_inner(amount);
     }
 
+    /// Divide one int by another, returning the quotient & remainder as a pair,
+    /// or an error if dividing by zero. Returns the result as a denormalized pair.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 999_999_999.into();
+    /// let b: Loose<10> = 56_789.into();
+    /// assert_eq!(a.div_rem_inner::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
+    /// ```
+    fn div_rem_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        mut self,
+        mut rhs: RHS,
+    ) -> Result<(OUT::Denormal, OUT::Denormal), BigIntError> {
+        if rhs.is_zero() {
+            return Err(BigIntError::DivisionByZero);
+        }
+        if rhs.len() > self.len() {
+            return Ok((OUT::Denormal::zero(), self.convert_inner::<BASE, OUT>()));
+        }
+        let sign = self.sign() * rhs.sign();
+        self.set_sign(Positive);
+        rhs.set_sign(Positive);
+        let quot_digits = self.len() - rhs.len() + 1;
+        let mut quot = OUT::Builder::new();
+        let mut prod = Self::zero();
+        let mut addends = rhs.clone().shl_inner(quot_digits - 1).addends().memo();
+
+        for _ in 0..quot_digits {
+            let mut digit_value = 0;
+            for index in (0..Self::BITS_PER_DIGIT).rev() {
+                let power = 1 << index;
+                let new_prod = unsafe {
+                    prod.clone()
+                        .add_inner::<_, Self>(addends.get(index).unwrap().clone())
+                        .unsafe_into()
+                };
+                if new_prod <= self {
+                    digit_value += power;
+                    prod = new_prod;
+                }
+                unsafe {
+                    addends.get_mut(index).unwrap().shr_assign_inner(1);
+                }
+            }
+            quot.push_back(digit_value);
+        }
+
+        let mut rem: OUT::Denormal = self.sub_inner::<_, OUT>(prod);
+        if !rem.is_zero() {
+            rem.set_sign(sign);
+        }
+
+        Ok((quot.with_sign(sign).into(), rem))
+    }
+
+    /// Divide one int by another, returning the quotient & remainder as a pair,
+    /// or an error if dividing by zero.
+    ///
+    /// ```
+    /// use big_int::prelude::*;
+    ///
+    /// let a: Loose<10> = 999_999_999.into();
+    /// let b: Loose<10> = 56_789.into();
+    /// assert_eq!(a.div_rem::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
+    /// ```
+    fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<(OUT, OUT), BigIntError> {
+        self.div_rem_inner::<RHS, OUT>(rhs)
+            .map(|(q, r): (OUT::Denormal, OUT::Denormal)| (q.unwrap(), r.unwrap()))
+    }
+
     /// Exponentiate the big int by `rhs`.
     fn exp_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
         self,
@@ -810,7 +882,7 @@ where
         if rhs.sign() == Negative {
             return Err(BigIntError::NegativeExponentiation);
         }
-        let mut mullands = MullandSet::from(self).memo();
+        let mut mullands = self.mullands().memo();
         let mut max_mulland = 0;
         let mut max_mulland_tetrand: RHS = 1.into();
         let mut mulland_tetrands: Vec<RHS> = vec![];
@@ -857,7 +929,7 @@ where
         if rhs <= 1.into() {
             return Err(BigIntError::LogOfSmallBase);
         }
-        let mut mullands = MullandSet::from(rhs).memo();
+        let mut mullands = rhs.mullands().memo();
         let mut max_mulland = 0;
         let mut max_mulland_tetrand: OUT = 1.into();
         let mut mulland_tetrands: Vec<OUT> = vec![];
@@ -910,12 +982,124 @@ where
         self.log_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
     }
 
-    fn root_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT::Denormal {
-        todo!()
+    fn sqrt_inner<OUT: BigInt<{ BASE }>>(self) -> Result<OUT::Denormal, BigIntError> {
+        if self < Self::zero() {
+            return Err(BigIntError::NegativeRoot);
+        }
+        if self.is_zero() {
+            return Ok(OUT::Denormal::zero())
+        }
+        let mut sq_addends = OUT::from(1).n_addends(4.into()).memo();
+        let mut base_addends = OUT::from(1).addends().memo();
+        let mut index = 0;
+        loop {
+            let comparison = sq_addends.get(index + 1).unwrap().cmp_inner(&self);
+            if comparison.is_le() {
+                index += 1;
+                if comparison.is_eq() {
+                    return Ok(base_addends.get(index).unwrap().clone().into());
+                }
+            } else {
+                break;
+            }
+        }
+        let mut square = sq_addends.get(index).unwrap().clone();
+        let mut base = base_addends.get(index).unwrap().clone();
+        // sdbg!(index);
+        // sdbg!(&square);
+        // sdbg!(&base);
+        for i in (0..index).rev() {
+            // sdbg!(i);
+            let base_addition = base_addends.get(i).unwrap().clone();
+            let sq_addition = sq_addends.get(i).unwrap().clone();
+            // sdbg!(&base_addition);
+            // sdbg!(&sq_addition);
+            let mut middle_part = base.clone() * base_addition.clone();
+            middle_part += middle_part.clone();
+            // sdbg!(&middle_part);
+            let new_square = square.clone() + middle_part + sq_addition;
+            let comparison = new_square.cmp_inner(&self);
+            // sdbg!(&new_square);
+            // sdbg!(&comparison);
+            if comparison.is_le() {
+                base += base_addition;
+                // sdbg!(&base);
+                if comparison.is_eq() {
+                    break;
+                }
+                square = new_square;
+                // sdbg!(&square);
+            }
+        }
+        Ok(base.into())
     }
 
-    fn root<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(self, rhs: RHS) -> OUT {
-        self.root_inner::<RHS, OUT>(rhs).unwrap()
+    fn sqrt<OUT: BigInt<{ BASE }>>(self) -> Result<OUT, BigIntError> {
+        self.sqrt_inner::<OUT>().map(|x| x.unwrap())
+    }
+
+    fn root_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT::Denormal, BigIntError> {
+        if self < Self::zero() {
+            return Err(BigIntError::NegativeRoot);
+        }
+        if self.is_zero() {
+            return Ok(OUT::Denormal::zero())
+        }
+        if rhs <= 1.into() {
+            return Err(BigIntError::SmallRoot);
+        }
+        // sdbg!(&self);
+        // sdbg!(&rhs);
+        let result_digits = (self.len() / Into::<usize>::into(rhs.clone())).max(1);
+        let mut result = OUT::from(1).shl_inner(result_digits);
+        result.set_digit(0, 0);
+        // sdbg!(&result);
+
+        'outer: for i in 0..result.len() {
+            // sdbg!(i);
+            let mut digit_value = 0;
+            for index in (0..Self::BITS_PER_DIGIT).rev() {
+                let power = 1 << index;
+                // sdbg!(index);
+                // sdbg!(power);
+                result.set_digit(i, digit_value + power);
+                // sdbg!(&result);
+                let new_exp: Self = result.clone().exp(rhs.clone()).unwrap();
+                // sdbg!(&new_exp);
+                let comparison = new_exp.cmp_inner(&self);
+                // sdbg!(&comparison);
+                if comparison.is_le() {
+                    digit_value += power;
+                    // sdbg!(&digit_value);
+                    if comparison.is_eq() {
+                        break 'outer;
+                    }
+                }
+            }
+            result.set_digit(i, digit_value);
+            // sdbg!(&result);
+        }
+        Ok(result.into())
+    }
+
+    fn root<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
+        self,
+        rhs: RHS,
+    ) -> Result<OUT, BigIntError> {
+        self.root_inner::<RHS, OUT>(rhs).map(|x| x.unwrap())
+    }
+
+    fn is_even(&self) -> bool {
+        if BASE % 2 == 0 {
+            self.get_digit(self.len() - 1)
+                .map(|d| d % 2 == 0)
+                .unwrap_or(true)
+        } else {
+            self.iter().filter(|d| d % 2 == 1).count() % 2 == 0
+        }
     }
 
     /// Iterate over the digits of the int.
@@ -1044,83 +1228,6 @@ where
         }
     }
 
-    /// Divide one int by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero. Returns the result as a denormalized pair.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let a: Loose<10> = 999_999_999.into();
-    /// let b: Loose<10> = 56_789.into();
-    /// assert_eq!(a.div_rem_inner::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
-    /// ```
-    fn div_rem_inner<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
-        mut self,
-        mut rhs: RHS,
-    ) -> Result<(OUT::Denormal, OUT::Denormal), BigIntError> {
-        if rhs.is_zero() {
-            return Err(BigIntError::DivisionByZero);
-        }
-        if rhs.len() > self.len() {
-            return Ok((OUT::Denormal::zero(), self.convert_inner::<BASE, OUT>()));
-        }
-        let sign = self.sign() * rhs.sign();
-        self.set_sign(Positive);
-        rhs.set_sign(Positive);
-        let quot_digits = self.len() - rhs.len() + 1;
-        let mut quot = OUT::Builder::new();
-        let mut prod = Self::zero();
-        let mut addends = AddendSet::from(rhs.clone().shl_inner(quot_digits - 1)).memo();
-
-        for _ in 0..quot_digits {
-            let mut digit_value = 0;
-            let mut index = 0;
-            let mut power = 1;
-            while power < BASE as Digit {
-                let new_prod = unsafe {
-                    prod.clone()
-                        .add_inner::<_, Self>(addends.get(index).unwrap().clone())
-                        .unsafe_into()
-                };
-                if new_prod <= self {
-                    digit_value += power;
-                    prod = new_prod;
-                }
-                unsafe {
-                    addends.get_mut(index).unwrap().shr_assign_inner(1);
-                }
-                power <<= 1;
-                index += 1;
-            }
-            quot.push_back(digit_value);
-        }
-
-        let mut rem: OUT::Denormal = self.sub_inner::<_, OUT>(prod);
-        if !rem.is_zero() {
-            rem.set_sign(sign);
-        }
-
-        Ok((quot.with_sign(sign).into(), rem))
-    }
-
-    /// Divide one int by another, returning the quotient & remainder as a pair,
-    /// or an error if dividing by zero.
-    ///
-    /// ```
-    /// use big_int::prelude::*;
-    ///
-    /// let a: Loose<10> = 999_999_999.into();
-    /// let b: Loose<10> = 56_789.into();
-    /// assert_eq!(a.div_rem::<_, Loose<10>>(b), Ok((17_609.into(), 2_498.into())));
-    /// ```
-    fn div_rem<RHS: BigInt<{ BASE }>, OUT: BigInt<{ BASE }>>(
-        self,
-        rhs: RHS,
-    ) -> Result<(OUT, OUT), BigIntError> {
-        self.div_rem_inner::<RHS, OUT>(rhs)
-            .map(|(q, r): (OUT::Denormal, OUT::Denormal)| (q.unwrap(), r.unwrap()))
-    }
-
     /// Convert an int from its own base to another target base,
     /// to another `BigInt` type, or both at once. Returns the result as
     /// a denormalized number.
@@ -1239,21 +1346,21 @@ where
 }
 
 /// Prepare a set of addends.
-/// 
+///
 /// In an addend set, each element is 2x the element before it.
 ///
 /// Used internally for efficient multiplication & division algorithms.
 struct AddendSet<const BASE: usize, B: BigInt<{ BASE }>> {
-    power: usize,
     addend: B,
 }
 
-impl<const BASE: usize, B: BigInt<{ BASE }>> From<B> for AddendSet<BASE, B> {
-    fn from(value: B) -> Self {
-        Self {
-            power: 1,
-            addend: value,
-        }
+trait Addends<const BASE: usize, B: BigInt<{ BASE }>> {
+    fn addends(self) -> AddendSet<BASE, B>;
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> Addends<BASE, B> for B {
+    fn addends(self) -> AddendSet<BASE, B> {
+        AddendSet { addend: self }
     }
 }
 
@@ -1263,27 +1370,26 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for AddendSet<BASE, B> {
     fn next(&mut self) -> Option<Self::Item> {
         let next_addend = self.addend.clone();
         self.addend += self.addend.clone();
-        self.power <<= 1;
         Some(next_addend)
     }
 }
 
 /// Prepare a set of mullands.
-/// 
+///
 /// In a mulland set, each element is the square of the element before it.
 ///
-/// Used internally for efficient exponentiation, logarithm, and nth root algorithms.
+/// Used internally for efficient exponentiation & logarithm algorithms.
 struct MullandSet<const BASE: usize, B: BigInt<{ BASE }>> {
-    tetrand: usize,
     mulland: B,
 }
 
-impl<const BASE: usize, B: BigInt<{ BASE }>> From<B> for MullandSet<BASE, B> {
-    fn from(value: B) -> Self {
-        Self {
-            tetrand: 1,
-            mulland: value,
-        }
+trait Mullands<const BASE: usize, B: BigInt<{ BASE }>> {
+    fn mullands(self) -> MullandSet<BASE, B>;
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> Mullands<BASE, B> for B {
+    fn mullands(self) -> MullandSet<BASE, B> {
+        MullandSet { mulland: self }
     }
 }
 
@@ -1293,10 +1399,40 @@ impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for MullandSet<BASE, B> {
     fn next(&mut self) -> Option<Self::Item> {
         let next_mulland = self.mulland.clone();
         self.mulland *= self.mulland.clone();
-        self.tetrand <<= 1;
         Some(next_mulland)
     }
 }
+
+/// Prepare a set of n-addends.
+///
+/// In an n-addend set, each element is `FACTOR` * the element before it.
+///
+/// Used internally for efficient nth root algorithms.
+struct NAddendSet<const BASE: usize, B: BigInt<{ BASE }>> {
+    addend: B,
+    factor: B,
+}
+
+trait NAddends<const BASE: usize, B: BigInt<{ BASE }>> {
+    fn n_addends(self, factor: B) -> NAddendSet<BASE, B>;
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> NAddends<BASE, B> for B {
+    fn n_addends(self, factor: B) -> NAddendSet<BASE, B> {
+        NAddendSet { addend: self, factor }
+    }
+}
+
+impl<const BASE: usize, B: BigInt<{ BASE }>> Iterator for NAddendSet<BASE, B> {
+    type Item = B;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next_mulland = self.addend.clone();
+        self.addend *= self.factor.clone();
+        Some(next_mulland)
+    }
+}
+
 
 /// A memoized iterator. Remembers elements that were yielded by the
 /// underlying iterator, and allows fetching of them after the fact.
@@ -1513,40 +1649,6 @@ impl Mul for Sign {
     }
 }
 
-/// Check if a number is a power of another number.
-///
-/// If `x` is a power of `y`, return `Some(n)` such that
-/// `x == y^n`. If not, return `None`.
-///
-/// ```
-/// use big_int::prelude::*;
-///
-/// assert_eq!(is_power(2, 3), None);
-/// assert_eq!(is_power(16, 4), Some(2));
-/// assert_eq!(is_power(27, 3), Some(3));
-/// assert_eq!(is_power(256, 2), Some(8));
-/// ```
-pub fn is_power(mut x: usize, y: usize) -> Option<usize> {
-    if x == 1 {
-        Some(0)
-    } else {
-        let mut power = 1;
-        loop {
-            if x % y != 0 {
-                return None;
-            }
-            match x.cmp(&y) {
-                Ordering::Equal => return Some(power),
-                Ordering::Less => return None,
-                Ordering::Greater => {
-                    power += 1;
-                    x /= y;
-                }
-            }
-        }
-    }
-}
-
 /// An iterator over the digits of a big int.
 ///
 /// ```
@@ -1587,4 +1689,49 @@ impl<'a, const BASE: usize, B: BigInt<{ BASE }>> DoubleEndedIterator for BigIntI
                 self.int.get_digit(*index)
             })
     }
+}
+
+/// Check if a number is a power of another number.
+///
+/// If `x` is a power of `y`, return `Some(n)` such that
+/// `x == y^n`. If not, return `None`.
+///
+/// ```
+/// use big_int::prelude::*;
+///
+/// assert_eq!(is_power(2, 3), None);
+/// assert_eq!(is_power(16, 4), Some(2));
+/// assert_eq!(is_power(27, 3), Some(3));
+/// assert_eq!(is_power(256, 2), Some(8));
+/// ```
+pub fn is_power(mut x: usize, y: usize) -> Option<usize> {
+    if x == 1 {
+        Some(0)
+    } else {
+        let mut power = 1;
+        loop {
+            if x % y != 0 {
+                return None;
+            }
+            match x.cmp(&y) {
+                Ordering::Equal => return Some(power),
+                Ordering::Less => return None,
+                Ordering::Greater => {
+                    power += 1;
+                    x /= y;
+                }
+            }
+        }
+    }
+}
+
+/// Calculate the minimum number of bits required to store a digit in a given base.
+pub(crate) const fn bits_per_digit(base: usize) -> usize {
+    let mut bits = 1;
+    let mut max_base_of_bits = 2;
+    while max_base_of_bits < base {
+        bits += 1;
+        max_base_of_bits <<= 1;
+    }
+    bits
 }
